@@ -5,3 +5,4 @@
  */
 
 export * from './fps-overlay';
+export * from './inventory';

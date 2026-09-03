@@ -6,3 +6,4 @@
  */
 
 export * from './demo-scene';
+export * from './inventory';
