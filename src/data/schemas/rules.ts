@@ -1,0 +1,85 @@
+/**
+ * Мини-язык условий и эффектов (`docs/planerka/01-concept/engine-architect.md`
+ * §3.7): один интерпретатор на диалоги (`dialog.ts`), квесты (`quest.ts`) и
+ * триггеры карт (`map.ts`). Здесь — только данные (zod-схема + типы);
+ * сам интерпретатор (чистая функция `condition/effect → world`) — зона
+ * gameplay-programmer (OF-018).
+ *
+ * `hasItem`/`giveItem` ссылаются на `item.*`, `questStage`/`startQuest` — на
+ * `quest.*`; существование id проверяется кросс-ссылочно в
+ * `tools/validate-data.ts`, а не здесь (одна схема не видит другие файлы).
+ */
+
+import { z } from 'zod';
+import { namespacedId } from './common';
+import { SkillKeySchema, StatKeySchema } from './rpg';
+
+const FlagValueSchema = z.union([z.boolean(), z.number(), z.string()]);
+export type FlagValue = z.infer<typeof FlagValueSchema>;
+
+const LeafConditionSchema = z.union([
+  z.object({
+    op: z.literal('hasItem'),
+    item: namespacedId('item'),
+    count: z.number().int().positive().default(1),
+  }),
+  z.object({ op: z.literal('flag'), key: z.string().min(1), eq: FlagValueSchema }),
+  z.object({ op: z.literal('stat'), stat: StatKeySchema, gte: z.number() }),
+  z.object({ op: z.literal('skill'), skill: SkillKeySchema, gte: z.number() }),
+  z.object({
+    op: z.literal('questStage'),
+    quest: namespacedId('quest'),
+    stage: z.string().min(1),
+    cmp: z.enum(['eq', 'atLeast']).default('atLeast'),
+  }),
+]);
+export type LeafCondition = z.infer<typeof LeafConditionSchema>;
+
+export type Condition =
+  | LeafCondition
+  | { op: 'all'; conditions: Condition[] }
+  | { op: 'any'; conditions: Condition[] }
+  | { op: 'not'; condition: Condition };
+
+/** Рекурсивная схема — `all`/`any`/`not` комбинируют условия друг с другом и с листьями выше. */
+export const ConditionSchema: z.ZodType<Condition> = z.lazy(() =>
+  z.union([
+    LeafConditionSchema,
+    z.object({ op: z.literal('all'), conditions: z.array(ConditionSchema).min(1) }),
+    z.object({ op: z.literal('any'), conditions: z.array(ConditionSchema).min(1) }),
+    z.object({ op: z.literal('not'), condition: ConditionSchema }),
+  ]),
+);
+
+export const EffectSchema = z.union([
+  z.object({
+    op: z.literal('giveItem'),
+    item: namespacedId('item'),
+    count: z.number().int().positive().default(1),
+  }),
+  z.object({ op: z.literal('setFlag'), key: z.string().min(1), value: FlagValueSchema }),
+  z.object({ op: z.literal('startQuest'), quest: namespacedId('quest') }),
+  z.object({ op: z.literal('damage'), amount: z.number().positive() }),
+  z.object({ op: z.literal('xp'), amount: z.number().positive() }),
+]);
+export type Effect = z.infer<typeof EffectSchema>;
+
+/**
+ * Обходит дерево условия и вызывает `visit` для каждого листа — используется
+ * `tools/validate-data.ts` для сбора ссылок (`hasItem.item`,
+ * `questStage.quest`) без дублирования обхода `all`/`any`/`not` в самом
+ * валидаторе.
+ */
+export function walkCondition(condition: Condition, visit: (leaf: LeafCondition) => void): void {
+  switch (condition.op) {
+    case 'all':
+    case 'any':
+      for (const c of condition.conditions) walkCondition(c, visit);
+      return;
+    case 'not':
+      walkCondition(condition.condition, visit);
+      return;
+    default:
+      visit(condition);
+  }
+}
