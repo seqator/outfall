@@ -1,0 +1,46 @@
+{
+  "name": "outfall",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Outfall — браузерная изометрическая реалтайм экшен-RPG",
+  "type": "module",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run typecheck && npm run lint && npm run test && vite build && npm run size-check",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "validate": "tsx tools/validate-data.ts",
+    "atlas": "tsx tools/pack-atlases.ts",
+    "size-check": "tsx tools/size-check.ts"
+  },
+  "dependencies": {
+    "pixi.js": "^8.20.1",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.62.1",
+    "@vitest/coverage-v8": "^5.0.0",
+    "eslint": "^10.9.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-import-x": "^4.17.1",
+    "prettier": "^3.9.6",
+    "rollup-plugin-visualizer": "^7.1.1",
+    "sharp": "^0.35.4",
+    "tsx": "^4.23.13",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.69.0",
+    "vite": "^8.2.2",
+    "vitest": "^5.0.0"
+  }
+}

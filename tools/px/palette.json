@@ -1,0 +1,51 @@
+{
+  "name": "outfall-40",
+  "version": 1,
+  "description": "Единственный источник цветов для Outfall. Любой пиксель в спрайте/тайле вне этого списка — ошибка сборки (см. tools/px/lint.ts, будущая задача).",
+  "colors": [
+    { "name": "soot", "hex": "#0F0E0C", "role": "core-shadow" },
+    { "name": "wet-asphalt", "hex": "#3A342C", "role": "core-shadow" },
+    { "name": "panel", "hex": "#6E6656", "role": "core-mid" },
+    { "name": "faded-plaster", "hex": "#A89C82", "role": "core-light" },
+    { "name": "rust", "hex": "#7A3F22", "role": "core-material" },
+    { "name": "ochre-lamp", "hex": "#C98A3A", "role": "core-material" },
+    { "name": "hospital-green", "hex": "#4B6B5A", "role": "core-material" },
+    { "name": "acid", "hex": "#B4F02A", "role": "core-accent" },
+
+    { "name": "skin-light", "hex": "#E8B08A", "role": "skin" },
+    { "name": "skin-mid", "hex": "#C98868", "role": "skin" },
+    { "name": "skin-shadow", "hex": "#8A5A42", "role": "skin" },
+    { "name": "skin-deep", "hex": "#4A2E22", "role": "skin" },
+    { "name": "blood-dark", "hex": "#8E1F1F", "role": "blood" },
+    { "name": "blood-mid", "hex": "#B23A2A", "role": "blood" },
+    { "name": "blood-bright", "hex": "#D65A3E", "role": "blood" },
+    { "name": "blood-dried", "hex": "#5C1414", "role": "blood" },
+
+    { "name": "night-shadow", "hex": "#1B2430", "role": "cool" },
+    { "name": "night-mid", "hex": "#2E3D4E", "role": "cool" },
+    { "name": "neon-blue", "hex": "#3AA7C9", "role": "cool" },
+    { "name": "neon-blue-light", "hex": "#6FD3E8", "role": "cool" },
+    { "name": "violet-noise", "hex": "#7B3FA0", "role": "cool" },
+    { "name": "violet-light", "hex": "#B685D6", "role": "cool" },
+    { "name": "steel-blue", "hex": "#435A63", "role": "cool" },
+    { "name": "glass-pale", "hex": "#8FA8AD", "role": "cool" },
+
+    { "name": "old-paper", "hex": "#D9C9A3", "role": "warm-neutral" },
+    { "name": "aged-cardboard", "hex": "#B79968", "role": "warm-neutral" },
+    { "name": "wood-mid", "hex": "#8B6B3D", "role": "warm-neutral" },
+    { "name": "wood-dark", "hex": "#5E4526", "role": "warm-neutral" },
+    { "name": "poster-red-faded", "hex": "#C24A2E", "role": "warm-neutral" },
+    { "name": "bone-white", "hex": "#E0DED0", "role": "warm-neutral" },
+    { "name": "dust-khaki", "hex": "#9C8F6E", "role": "warm-neutral" },
+    { "name": "leather-brown", "hex": "#6B5B3A", "role": "warm-neutral" },
+
+    { "name": "hostile-red", "hex": "#FF3B2F", "role": "accent-danger" },
+    { "name": "warning-yellow", "hex": "#F2C037", "role": "accent-warning" },
+    { "name": "flash-white", "hex": "#F4F1E8", "role": "accent-flash" },
+    { "name": "lep-neon-pink", "hex": "#FF5FA2", "role": "accent-anomaly" },
+    { "name": "terminal-phosphor", "hex": "#2FE0A0", "role": "accent-ui" },
+    { "name": "terminal-amber", "hex": "#FFB13D", "role": "accent-ui" },
+    { "name": "fire-orange", "hex": "#FF7A1A", "role": "accent-fx" },
+    { "name": "toxic-teal", "hex": "#14F0C4", "role": "accent-fx" }
+  ]
+}
