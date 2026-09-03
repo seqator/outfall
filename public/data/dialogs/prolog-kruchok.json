@@ -1,0 +1,17 @@
+{
+  "id": "dialog.prolog_kruchok",
+  "npc": "npc.sanitar",
+  "start": "start",
+  "nodes": {
+    "start": {
+      "speaker": "npc.sanitar",
+      "textKey": "dialog.prolog_kruchok.start",
+      "choices": [{ "textKey": "dialog.prolog_kruchok.choice.ponyal", "next": "title" }]
+    },
+    "title": {
+      "speaker": "narrator",
+      "textKey": "dialog.prolog_kruchok.title",
+      "choices": []
+    }
+  }
+}

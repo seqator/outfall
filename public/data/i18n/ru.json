@@ -1,0 +1,20 @@
+{
+  "map.truba.name": "Труба",
+  "npc.sanitar.name": "Санитар",
+  "npc.rodion.name": "Родион «Ключик» Углов",
+
+  "dialog.prolog_smotritel.start": "Вода пошла — Плотина спускает сброс. Шевелись, не в первый раз ныряешь.",
+  "dialog.prolog_smotritel.choice.yazyk": "[Язык 5] Не учи учёного — я и без соплей разберусь.",
+  "dialog.prolog_smotritel.choice.default": "Понял. Иду к решётке.",
+  "dialog.prolog_smotritel.choice.tupoy": "Вода. Она мокрая. Я помню с прошлого раза.",
+
+  "dialog.prolog_vybor.start": "Ключ… возьми. Тону!",
+  "dialog.prolog_vybor.choice.spasti": "Вытащить его.",
+  "dialog.prolog_vybor.choice.klyuch": "Снять ключ и оставить течению.",
+  "dialog.prolog_vybor.spas_end": "Ты… должен мне теперь. Родион, с Плотины. Не забуду.",
+  "dialog.prolog_vybor.klyuch_end": "Ключ у тебя. Родиона утягивает под решётку — и уже не видно.",
+
+  "dialog.prolog_kruchok.start": "Внимание на связи: Веденеев запросил мощность на НИИ. Опять.",
+  "dialog.prolog_kruchok.choice.ponyal": "Понял.",
+  "dialog.prolog_kruchok.title": "Глава 1. Труба."
+}

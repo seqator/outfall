@@ -1,0 +1,30 @@
+{
+  "id": "dialog.prolog_smotritel",
+  "npc": "npc.sanitar",
+  "start": "start",
+  "nodes": {
+    "start": {
+      "speaker": "npc.sanitar",
+      "textKey": "dialog.prolog_smotritel.start",
+      "choices": [
+        {
+          "textKey": "dialog.prolog_smotritel.choice.yazyk",
+          "next": null,
+          "check": { "stat": "yazyk", "dc": 5 }
+        },
+        {
+          "textKey": "dialog.prolog_smotritel.choice.default",
+          "next": null
+        },
+        {
+          "textKey": "dialog.prolog_smotritel.choice.tupoy",
+          "next": null,
+          "condition": {
+            "op": "not",
+            "condition": { "op": "stat", "stat": "smekalka", "gte": 4 }
+          }
+        }
+      ]
+    }
+  }
+}

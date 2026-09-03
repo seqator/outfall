@@ -1,0 +1,33 @@
+{
+  "id": "dialog.prolog_vybor",
+  "npc": "npc.rodion",
+  "start": "start",
+  "nodes": {
+    "start": {
+      "speaker": "npc.rodion",
+      "textKey": "dialog.prolog_vybor.start",
+      "choices": [
+        {
+          "textKey": "dialog.prolog_vybor.choice.spasti",
+          "next": "spas_end",
+          "effects": [{ "op": "setFlag", "key": "flag.prolog_vybor", "value": "spas" }]
+        },
+        {
+          "textKey": "dialog.prolog_vybor.choice.klyuch",
+          "next": "klyuch_end",
+          "effects": [{ "op": "setFlag", "key": "flag.prolog_vybor", "value": "klyuch" }]
+        }
+      ]
+    },
+    "spas_end": {
+      "speaker": "npc.rodion",
+      "textKey": "dialog.prolog_vybor.spas_end",
+      "choices": []
+    },
+    "klyuch_end": {
+      "speaker": "narrator",
+      "textKey": "dialog.prolog_vybor.klyuch_end",
+      "choices": []
+    }
+  }
+}

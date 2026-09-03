@@ -3,18 +3,21 @@ import { createEventBus } from '../../../src/core/events';
 import { createInputSnapshot } from '../../../src/core/input';
 import { createSeededRng } from '../../../src/core/rng';
 import { createWorld } from '../../../src/core/world';
-import { SYSTEM_ORDER, inputControlSystem, movementSystem } from '../../../src/sim';
+import { SYSTEM_ORDER, collisionSystem, inputControlSystem, movementSystem } from '../../../src/sim';
 
 function build() {
   return createWorld(createSeededRng(1), createEventBus());
 }
 
 describe('sim/systems: SYSTEM_ORDER', () => {
-  it('содержит inputControlSystem перед movementSystem (стадия input раньше movement)', () => {
+  it('содержит inputControlSystem перед movementSystem перед collisionSystem (input → movement → collision)', () => {
     expect(SYSTEM_ORDER.indexOf(inputControlSystem)).toBeLessThan(
       SYSTEM_ORDER.indexOf(movementSystem),
     );
-    expect(SYSTEM_ORDER).toHaveLength(2);
+    expect(SYSTEM_ORDER.indexOf(movementSystem)).toBeLessThan(
+      SYSTEM_ORDER.indexOf(collisionSystem),
+    );
+    expect(SYSTEM_ORDER).toHaveLength(3);
   });
 });
 
