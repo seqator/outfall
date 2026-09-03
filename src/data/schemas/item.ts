@@ -41,21 +41,31 @@ export const WeaponStatsSchema = z.object({
 });
 export type WeaponStats = z.infer<typeof WeaponStatsSchema>;
 
-export const ItemSchema = z.object({
-  id: namespacedId('item'),
-  nameKey: z.string(),
-  descKey: z.string(),
-  kind: ItemKindSchema,
-  /** Кг, участвует в лимите веса `Вес_лимит = 20 + 5 × Каркас` (`rpg-system.md` §1.1). */
-  weight: z.number().nonnegative(),
-  /** Базовая цена до модификатора Языка (`rpg-system.md` §1.5); TODO(OF-007) — точные числа. */
-  value: z.number().int().nonnegative(),
-  stack: z.number().int().positive().default(1),
-  weapon: WeaponStatsSchema.optional(),
-  /** Эффект при использовании (расходники) — пусто для брони/лута/ключей. */
-  effects: z.array(EffectSchema).default([]),
-  /** «Час до каши» (world-bible, глоссарий): секунд до порчи после вскрытия; TODO(OF-007) — точное число. */
-  spoilSec: z.number().positive().optional(),
-});
+export const ItemSchema = z
+  .object({
+    id: namespacedId('item'),
+    nameKey: z.string(),
+    descKey: z.string(),
+    kind: ItemKindSchema,
+    /** Кг, участвует в лимите веса `Вес_лимит = 20 + 5 × Каркас` (`rpg-system.md` §1.1). */
+    weight: z.number().nonnegative(),
+    /** Базовая цена до модификатора Языка (`rpg-system.md` §1.5); TODO(OF-007) — точные числа. */
+    value: z.number().int().nonnegative(),
+    stack: z.number().int().positive().default(1),
+    weapon: WeaponStatsSchema.optional(),
+    /** Эффект при использовании (расходники) — пусто для брони/лута/ключей. */
+    effects: z.array(EffectSchema).default([]),
+    /** «Час до каши» (world-bible, глоссарий): секунд до порчи после вскрытия; TODO(OF-007) — точное число. */
+    spoilSec: z.number().positive().optional(),
+  })
+  .superRefine((item, ctx) => {
+    if (item.kind === 'weapon' && !item.weapon) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `item "${item.id}": kind "weapon" требует заполненного поля weapon`,
+        path: ['weapon'],
+      });
+    }
+  });
 
 export type Item = z.infer<typeof ItemSchema>;

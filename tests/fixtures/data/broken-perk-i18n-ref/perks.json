@@ -1,0 +1,26 @@
+[
+  {
+    "id": "perk.bystrye_ruki",
+    "nameKey": "perk.bystrye_ruki.name_typo",
+    "descKey": "perk.bystrye_ruki.desc",
+    "archetype": "strelok",
+    "minLevel": 2,
+    "requires": [
+      {
+        "type": "stat",
+        "stat": "ostrota",
+        "gte": 6
+      }
+    ],
+    "modifiers": [
+      {
+        "target": "reloadTimeMult",
+        "value": 0.75
+      },
+      {
+        "target": "weaponSwitchMs",
+        "value": 0
+      }
+    ]
+  }
+]

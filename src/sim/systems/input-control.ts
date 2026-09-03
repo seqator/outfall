@@ -13,6 +13,10 @@ export function inputControlSystem(world: World, _dt: number, input: InputSnapsh
   for (const entity of world.query('controlled', 'velocity')) {
     const controlled = world.store('controlled').get(entity);
     const velocity = world.store('velocity').get(entity);
+    // `world.query('controlled', 'velocity')` уже гарантирует наличие обоих
+    // компонентов — проверка защищает только от гипотетического рассинхрона
+    // между query() и store(), а не от реального сценария в текущей ECS.
+    /* v8 ignore next */
     if (!controlled || !velocity) continue;
 
     velocity.vx = input.moveX * controlled.speed;

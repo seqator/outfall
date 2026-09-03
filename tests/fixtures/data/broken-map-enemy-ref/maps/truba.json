@@ -1,0 +1,70 @@
+{
+  "id": "map.truba",
+  "nameKey": "map.truba.name",
+  "width": 2,
+  "height": 2,
+  "tileset": "truba",
+  "layers": {
+    "ground": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "walls": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "collision": [
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "npcs": [
+    {
+      "id": "npc.sanitar",
+      "nameKey": "npc.sanitar.name",
+      "position": {
+        "x": 1,
+        "y": 1
+      }
+    }
+  ],
+  "enemySpawns": [
+    {
+      "id": "spawn_raki_1",
+      "enemyId": "enemy.ghost_crab",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "count": 1
+    }
+  ],
+  "itemPickups": [
+    {
+      "id": "pickup_pistol",
+      "itemId": "item.pistol_ogryzok",
+      "position": {
+        "x": 1,
+        "y": 0
+      },
+      "count": 1
+    }
+  ],
+  "triggers": [],
+  "exits": [
+    {
+      "id": "exit_to_self",
+      "position": {
+        "x": 0,
+        "y": 1
+      },
+      "toMap": "map.truba"
+    }
+  ]
+}

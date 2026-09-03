@@ -117,6 +117,10 @@ class WorldImpl implements World, WorldControl {
       store.remove(e);
     }
     const index = indexOfEntityId(e);
+    // `generations.get(index)` не может быть undefined: `index` взят из живого
+    // `e`, а запись о поколении для него создаётся в `create()` до того, как
+    // `e` вообще мог стать живым. `?? 0` — чистая защита инварианта.
+    /* v8 ignore next */
     const nextGeneration = ((this.generations.get(index) ?? 0) + 1) % GENERATION_MOD;
     this.generations.set(index, nextGeneration);
     this.freeIndices.push(index);
@@ -151,6 +155,11 @@ class WorldImpl implements World, WorldControl {
       const others = rawStores.filter((candidate) => candidate !== base);
 
       for (const id of base.entities()) {
+        // `destroy()` чистит сущность из всех существующих сторов компонентов
+        // (см. выше), поэтому мёртвый id в `base.entities()` недостижим при
+        // нормальном использовании публичного API — проверка на случай, если
+        // это свойство когда-нибудь перестанет держаться.
+        /* v8 ignore next */
         if (!aliveIds.has(id)) continue;
         let matches = true;
         for (const other of others) {

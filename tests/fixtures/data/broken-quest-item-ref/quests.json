@@ -1,0 +1,33 @@
+[
+  {
+    "id": "quest.pervyj_nyrok",
+    "titleKey": "quest.pervyj_nyrok.title",
+    "stages": [
+      {
+        "id": "start",
+        "descKey": "quest.pervyj_nyrok.stage.start",
+        "onEnter": [],
+        "complete": {
+          "op": "hasItem",
+          "item": "item.does_not_exist",
+          "count": 1
+        }
+      },
+      {
+        "id": "done",
+        "descKey": "quest.pervyj_nyrok.stage.done",
+        "onEnter": [
+          {
+            "op": "xp",
+            "amount": 150
+          }
+        ],
+        "complete": {
+          "op": "flag",
+          "key": "prolog_done",
+          "eq": true
+        }
+      }
+    ]
+  }
+]

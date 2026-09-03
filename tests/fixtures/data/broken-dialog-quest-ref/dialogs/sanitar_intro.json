@@ -1,0 +1,37 @@
+{
+  "id": "dialog.sanitar_intro",
+  "npc": "npc.sanitar",
+  "start": "greet",
+  "nodes": {
+    "greet": {
+      "speaker": "npc.sanitar",
+      "textKey": "dialog.sanitar_intro.greet",
+      "choices": [
+        {
+          "textKey": "dialog.sanitar_intro.choice.ok",
+          "next": null,
+          "effects": [
+            {
+              "op": "startQuest",
+              "quest": "quest.does_not_exist"
+            }
+          ]
+        },
+        {
+          "textKey": "dialog.sanitar_intro.choice.ask",
+          "next": "ask"
+        }
+      ]
+    },
+    "ask": {
+      "speaker": "npc.sanitar",
+      "textKey": "dialog.sanitar_intro.ask",
+      "choices": [
+        {
+          "textKey": "dialog.sanitar_intro.choice.back",
+          "next": "greet"
+        }
+      ]
+    }
+  }
+}

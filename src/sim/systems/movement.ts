@@ -13,6 +13,10 @@ export function movementSystem(world: World, dt: number, _input: InputSnapshot):
   for (const entity of world.query('transform', 'velocity')) {
     const transform = world.store('transform').get(entity);
     const velocity = world.store('velocity').get(entity);
+    // `world.query('transform', 'velocity')` уже гарантирует наличие обоих
+    // компонентов — проверка защищает только от гипотетического рассинхрона
+    // между query() и store(), а не от реального сценария в текущей ECS.
+    /* v8 ignore next */
     if (!transform || !velocity) continue;
 
     transform.prevX = transform.x;

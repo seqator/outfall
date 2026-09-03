@@ -1,0 +1,21 @@
+[
+  {
+    "id": "enemy.raki",
+    "nameKey": "enemy.raki.name",
+    "role": "rusher",
+    "hp": 40,
+    "armor": 2,
+    "attack": {
+      "nameKey": "enemy.raki.attack.name",
+      "telegraphMs": 400,
+      "damage": 15,
+      "cooldownMs": 1500
+    },
+    "weakness": {
+      "nameKey": "enemy.raki.weakness.name",
+      "multiplier": 1.5,
+      "ignoresArmor": false
+    },
+    "sliceReady": true
+  }
+]
