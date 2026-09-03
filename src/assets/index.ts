@@ -7,7 +7,10 @@ export type LocationId = string;
 
 export interface AssetManifest {
   version: number;
-  locations: Record<LocationId, { atlases: string[]; audio: string[]; maps: string[]; data: string[] }>;
+  locations: Record<
+    LocationId,
+    { atlases: string[]; audio: string[]; maps: string[]; data: string[] }
+  >;
   /** UI, герой, общие эффекты — грузятся один раз. */
   shared: { atlases: string[]; audio: string[] };
 }

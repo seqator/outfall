@@ -5,6 +5,7 @@
  * `no-restricted-globals`).
  */
 
-export * from './components';
+// components/ и formulas/ пока не экспортируют ничего (наполнятся вместе с
+// первыми системами — OF-015/016), поэтому `export *` из них ESLint считает
+// ошибкой ("no named exports"). systems/ уже содержит контракт `System`.
 export * from './systems';
-export * from './formulas';

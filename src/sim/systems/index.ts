@@ -5,8 +5,8 @@
  * наполняется по мере их появления.
  */
 
-import type { World } from '../../core/world';
 import type { InputSnapshot } from '../../core/input';
+import type { World } from '../../core/world';
 
 export type System = (world: World, dt: number, input: InputSnapshot) => void;
 

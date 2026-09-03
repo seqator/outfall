@@ -1,5 +1,5 @@
-import { defineConfig } from 'vite';
 import { visualizer } from 'rollup-plugin-visualizer';
+import { defineConfig } from 'vite';
 
 // Каркас: одна тяжёлая runtime-зависимость (pixi.js) изолирована в src/render/pixi,
 // поэтому её удобно вынести в отдельный чанк и грузить лениво вместе со сценой.
@@ -10,8 +10,9 @@ export default defineConfig({
     sourcemap: true,
     rollupOptions: {
       output: {
-        manualChunks: {
-          pixi: ['pixi.js'],
+        manualChunks(id: string): string | undefined {
+          if (id.includes('node_modules/pixi.js')) return 'pixi';
+          return undefined;
         },
       },
       plugins: [

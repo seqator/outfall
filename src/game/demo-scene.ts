@@ -14,7 +14,10 @@ export interface DemoScene {
   destroy(): void;
 }
 
-export async function createDemoScene(root: HTMLElement, canvas: HTMLCanvasElement): Promise<DemoScene> {
+export async function createDemoScene(
+  root: HTMLElement,
+  canvas: HTMLCanvasElement,
+): Promise<DemoScene> {
   const renderer = new PixiRenderer();
   await renderer.init(canvas, {
     width: root.clientWidth,

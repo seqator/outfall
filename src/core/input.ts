@@ -7,15 +7,7 @@
  */
 
 export type Action =
-  | 'attack'
-  | 'interact'
-  | 'dash'
-  | 'reload'
-  | 'inventory'
-  | 'pause'
-  | 'slot1'
-  | 'slot2'
-  | 'slot3';
+  'attack' | 'interact' | 'dash' | 'reload' | 'inventory' | 'pause' | 'slot1' | 'slot2' | 'slot3';
 
 /** Неизменяемый снимок ввода на один тик симуляции. */
 export interface InputSnapshot {
