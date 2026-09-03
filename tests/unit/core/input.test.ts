@@ -45,7 +45,10 @@ describe('core/input: createScriptedInput', () => {
   });
 
   it('после конца последовательности повторяет последний снимок', () => {
-    const seq: InputSnapshot[] = [createInputSnapshot({ moveX: 1 }), createInputSnapshot({ moveY: 1 })];
+    const seq: InputSnapshot[] = [
+      createInputSnapshot({ moveX: 1 }),
+      createInputSnapshot({ moveY: 1 }),
+    ];
     const source = createScriptedInput(seq);
 
     source.snapshot();
@@ -61,7 +64,10 @@ describe('core/input: createScriptedInput', () => {
   });
 
   it('два независимых источника с одной и той же записью не делят курсор', () => {
-    const seq: InputSnapshot[] = [createInputSnapshot({ moveX: 1 }), createInputSnapshot({ moveX: 2 })];
+    const seq: InputSnapshot[] = [
+      createInputSnapshot({ moveX: 1 }),
+      createInputSnapshot({ moveX: 2 }),
+    ];
     const a = createScriptedInput(seq);
     const b = createScriptedInput(seq);
 

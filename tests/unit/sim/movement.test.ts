@@ -11,7 +11,9 @@ function build() {
 
 describe('sim/systems: SYSTEM_ORDER', () => {
   it('содержит inputControlSystem перед movementSystem (стадия input раньше movement)', () => {
-    expect(SYSTEM_ORDER.indexOf(inputControlSystem)).toBeLessThan(SYSTEM_ORDER.indexOf(movementSystem));
+    expect(SYSTEM_ORDER.indexOf(inputControlSystem)).toBeLessThan(
+      SYSTEM_ORDER.indexOf(movementSystem),
+    );
     expect(SYSTEM_ORDER).toHaveLength(2);
   });
 });
@@ -43,7 +45,9 @@ describe('sim/systems: inputControlSystem', () => {
     const e = world.create();
     world.store('controlled').add(e, { speed: 4 });
 
-    expect(() => inputControlSystem(world, 1 / 60, createInputSnapshot({ moveX: 1 }))).not.toThrow();
+    expect(() =>
+      inputControlSystem(world, 1 / 60, createInputSnapshot({ moveX: 1 })),
+    ).not.toThrow();
     expect(world.store('velocity').has(e)).toBe(false);
   });
 });
