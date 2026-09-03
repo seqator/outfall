@@ -94,4 +94,5 @@ export const MapSchema = z
     }
   });
 
-export type Map = z.infer<typeof MapSchema>;
+/** Названо `GameMap`, а не `Map`, чтобы не затенять встроенный `Map` в файлах, где импортируется `import type { GameMap } from '...data/schemas'`. */
+export type GameMap = z.infer<typeof MapSchema>;
