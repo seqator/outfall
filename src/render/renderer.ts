@@ -9,14 +9,25 @@ import type { World } from '../core/world';
 import type { Camera } from './camera';
 
 /**
- * Плейсхолдер данных карты до появления `MapSchema` (задача OF-009).
- * Форма уточнится, когда схема будет готова — контракт `IRenderer.setMap`
- * от этого не изменится.
+ * Данные карты для статической отрисовки тайлов (OF-015, `MapSchema` из
+ * `src/data/schemas/map.ts`, задача OF-009). `render` не импортирует
+ * `data/schemas` напрямую (граница слоёв, §1 архитектуры) — `game` строит
+ * `MapData` из `GameMap` (см. `src/game/world/map-loader.ts`) и передаёт
+ * сюда только то, что нужно для отрисовки: без ссылок на контент (NPC,
+ * враги, предметы — это забота `game`/будущих систем, не рендера).
  */
 export interface MapData {
   readonly id: string;
   readonly width: number;
   readonly height: number;
+  readonly layers: {
+    /** Индексы тайлов пола, row-major, длина width×height. Тайлсет ещё не готов (OF-022) — рендер красит по индексу. */
+    readonly ground: readonly number[];
+    /** Индексы тайлов стен, row-major; 0 — нет стены. */
+    readonly walls: readonly number[];
+    /** 0 — проходимо, 1 — стена. Тот же формат, что `MapGridComponent` в `sim` — источник истины для рендера то же самое поле, что даёт `collisionSystem`. */
+    readonly collision: readonly (0 | 1)[];
+  };
 }
 
 /** Плейсхолдер визуального эффекта до появления полноценной fx-системы (OF-016). */
