@@ -1,0 +1,46 @@
+{
+  "id": "dialog.otrabotka_tolya",
+  "npc": "npc.tolya",
+  "start": "found",
+  "nodes": {
+    "found": {
+      "speaker": "npc.tolya",
+      "textKey": "dialog.otrabotka_tolya.found",
+      "choices": [
+        { "textKey": "dialog.otrabotka_tolya.choice.sdal", "next": "sdal" },
+        { "textKey": "dialog.otrabotka_tolya.choice.otkazal", "next": "otkazal" }
+      ]
+    },
+    "sdal": {
+      "speaker": "npc.grinya",
+      "textKey": "dialog.otrabotka_tolya.sdal",
+      "choices": [
+        {
+          "textKey": "dialog.otrabotka_tolya.choice.yasno",
+          "next": null,
+          "effects": [
+            { "op": "setFlag", "key": "flag.otrabotka_tolya", "value": "sdal" },
+            { "op": "incrementFlag", "key": "rep.progress2", "amount": 15 },
+            { "op": "giveItem", "item": "item.mat_detali", "count": 5 },
+            { "op": "xp", "amount": 50 }
+          ]
+        }
+      ]
+    },
+    "otkazal": {
+      "speaker": "npc.tolya",
+      "textKey": "dialog.otrabotka_tolya.otkazal",
+      "choices": [
+        {
+          "textKey": "dialog.otrabotka_tolya.choice.idi",
+          "next": null,
+          "effects": [
+            { "op": "setFlag", "key": "flag.otrabotka_tolya", "value": "otkazal" },
+            { "op": "incrementFlag", "key": "rep.progress2", "amount": -5 },
+            { "op": "xp", "amount": 50 }
+          ]
+        }
+      ]
+    }
+  }
+}

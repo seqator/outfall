@@ -1,0 +1,44 @@
+{
+  "id": "dialog.rubilnik",
+  "npc": "npc.modest_busygin",
+  "start": "start",
+  "nodes": {
+    "start": {
+      "speaker": "npc.modest_busygin",
+      "textKey": "dialog.rubilnik.start",
+      "choices": [
+        { "textKey": "dialog.rubilnik.choice.otklyuchit", "next": "otklyuchil" },
+        { "textKey": "dialog.rubilnik.choice.otkazatsya", "next": "otkazal" }
+      ]
+    },
+    "otklyuchil": {
+      "speaker": "npc.tetya_valya",
+      "textKey": "dialog.rubilnik.otklyuchil",
+      "choices": [
+        {
+          "textKey": "dialog.rubilnik.choice.mnogotochie",
+          "next": null,
+          "effects": [
+            { "op": "setFlag", "key": "flag.rubilnik", "value": "otklyuchil" },
+            { "op": "incrementFlag", "key": "rep.energosbyt", "amount": 15 },
+            { "op": "incrementFlag", "key": "rep.progress2", "amount": -10 }
+          ]
+        }
+      ]
+    },
+    "otkazal": {
+      "speaker": "npc.modest_busygin",
+      "textKey": "dialog.rubilnik.otkazal",
+      "choices": [
+        {
+          "textKey": "dialog.rubilnik.choice.kak_skazhesh",
+          "next": null,
+          "effects": [
+            { "op": "setFlag", "key": "flag.rubilnik", "value": "otkazal" },
+            { "op": "incrementFlag", "key": "rep.energosbyt", "amount": -10 }
+          ]
+        }
+      ]
+    }
+  }
+}

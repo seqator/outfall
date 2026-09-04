@@ -1,0 +1,43 @@
+{
+  "id": "dialog.dlya_kolodtsa",
+  "npc": "npc.emissary_chistyh",
+  "start": "start",
+  "nodes": {
+    "start": {
+      "speaker": "npc.emissary_chistyh",
+      "textKey": "dialog.dlya_kolodtsa.start",
+      "choices": [
+        { "textKey": "dialog.dlya_kolodtsa.choice.privel", "next": "privel" },
+        { "textKey": "dialog.dlya_kolodtsa.choice.otkazal", "next": "otkazal" }
+      ]
+    },
+    "privel": {
+      "speaker": "narrator",
+      "textKey": "dialog.dlya_kolodtsa.privel",
+      "choices": [
+        {
+          "textKey": "dialog.dlya_kolodtsa.choice.dalshe",
+          "next": null,
+          "effects": [
+            { "op": "setFlag", "key": "flag.dlya_kolodtsa", "value": "privel" },
+            { "op": "incrementFlag", "key": "rep.chistye", "amount": 15 }
+          ]
+        }
+      ]
+    },
+    "otkazal": {
+      "speaker": "npc.timofey_rzhavyy",
+      "textKey": "dialog.dlya_kolodtsa.otkazal",
+      "choices": [
+        {
+          "textKey": "dialog.dlya_kolodtsa.choice.ne_stoilo",
+          "next": null,
+          "effects": [
+            { "op": "setFlag", "key": "flag.dlya_kolodtsa", "value": "otkazal" },
+            { "op": "incrementFlag", "key": "rep.chistye", "amount": -10 }
+          ]
+        }
+      ]
+    }
+  }
+}

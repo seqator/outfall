@@ -1,0 +1,19 @@
+{
+  "id": "dialog.otrabotka_grinya",
+  "npc": "npc.grinya",
+  "start": "start",
+  "nodes": {
+    "start": {
+      "speaker": "npc.grinya",
+      "textKey": "dialog.otrabotka_grinya.start",
+      "choices": [
+        {
+          "textKey": "dialog.otrabotka_grinya.choice.naiti",
+          "next": null,
+          "effects": [{ "op": "startQuest", "quest": "quest.svoi_truby" }]
+        },
+        { "textKey": "dialog.otrabotka_grinya.choice.ne_moe", "next": null }
+      ]
+    }
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "id": "dialog.ya_kran",
+  "npc": "npc.palych",
+  "start": "confession",
+  "nodes": {
+    "confession": {
+      "speaker": "npc.palych",
+      "textKey": "dialog.ya_kran.confession",
+      "choices": [
+        {
+          "textKey": "dialog.ya_kran.choice.i_chto",
+          "next": "kran",
+          "effects": [{ "op": "setFlag", "key": "flag.palych_pravda", "value": true }]
+        }
+      ]
+    },
+    "kran": {
+      "speaker": "npc.palych",
+      "textKey": "dialog.ya_kran.kran",
+      "choices": [
+        {
+          "textKey": "dialog.ya_kran.choice.ubit",
+          "next": "ubil",
+          "effects": [
+            { "op": "setFlag", "key": "flag.palych_ubit", "value": true },
+            { "op": "setFlag", "key": "rep.progress2", "value": -100 }
+          ]
+        },
+        {
+          "textKey": "dialog.ya_kran.choice.poshadit",
+          "next": "poshadil",
+          "effects": [{ "op": "setFlag", "key": "flag.palych_ubit", "value": false }]
+        }
+      ]
+    },
+    "ubil": {
+      "speaker": "narrator",
+      "textKey": "dialog.ya_kran.ubil",
+      "choices": [{ "textKey": "dialog.ya_kran.choice.mnogotochie", "next": null }]
+    },
+    "poshadil": {
+      "speaker": "npc.palych",
+      "textKey": "dialog.ya_kran.poshadil",
+      "choices": [{ "textKey": "dialog.ya_kran.choice.mnogotochie", "next": null }]
+    }
+  }
+}
