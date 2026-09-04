@@ -1,0 +1,49 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`dialog-runner: prolog-smotritel.json — полный проход, обе проверки навыков видны > видна разница веток между состояниями: набор видимых вариантов и их check.passed различаются > dimwit 1`] = `
+[
+  {
+    "check": {
+      "dc": 5,
+      "passed": false,
+      "stat": "yazyk",
+    },
+    "textKey": "dialog.prolog_smotritel.choice.yazyk",
+  },
+  {
+    "check": undefined,
+    "textKey": "dialog.prolog_smotritel.choice.default",
+  },
+  {
+    "check": undefined,
+    "textKey": "dialog.prolog_smotritel.choice.tupoy",
+  },
+]
+`;
+
+exports[`dialog-runner: prolog-smotritel.json — полный проход, обе проверки навыков видны > видна разница веток между состояниями: набор видимых вариантов и их check.passed различаются > talkative 1`] = `
+[
+  "dialog.prolog_smotritel.choice.yazyk",
+  "dialog.prolog_smotritel.choice.default",
+]
+`;
+
+exports[`dialog-runner: prolog-vybor.json — снапшот обхода обоими исходами > исход «ключ» 1`] = `
+{
+  "finalNodeId": "klyuch_end",
+  "finalSpeaker": "narrator",
+  "flags": {
+    "flag.prolog_vybor": "klyuch",
+  },
+}
+`;
+
+exports[`dialog-runner: prolog-vybor.json — снапшот обхода обоими исходами > исход «спас» 1`] = `
+{
+  "finalNodeId": "spas_end",
+  "finalSpeaker": "npc.rodion",
+  "flags": {
+    "flag.prolog_vybor": "spas",
+  },
+}
+`;

@@ -5,10 +5,8 @@
  * `no-restricted-globals`).
  */
 
-// formulas/ пока не экспортирует ничего (наполнится вместе с боевыми
-// формулами — OF-016), поэтому `export *` из него ESLint считает ошибкой
-// ("no named exports"). components/ и systems/ уже содержат первый пример
-// (движение); simulation.ts склеивает их в контракт `Simulation` из core.
 export * from './components';
 export * from './systems';
 export * from './simulation';
+export * from './formulas';
+export * from './events';

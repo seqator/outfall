@@ -1,8 +1,14 @@
 /**
- * Формулы — чистые функции без побочных эффектов: урон, крит, шансы, опыт.
- * Требование архитектуры: 100% покрытие тестами (см. docs/tech/architecture.md).
- *
- * Каркас пуст: первые формулы (урон/крит/разброс) добавляются в OF-016.
+ * Публичный вход `sim/formulas` — чистые функции урона/крита/разброса/
+ * рывка/жара/шока (`docs/design/combat.md` §4/§5) плюс статические данные
+ * оружия/врагов среза, которые эти формулы используют.
  */
 
-export {};
+export * from './damage';
+export * from './crit';
+export * from './spread';
+export * from './dash';
+export * from './heat';
+export * from './shock';
+export * from './weapons';
+export * from './enemies';
