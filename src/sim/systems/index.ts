@@ -9,8 +9,12 @@
  * `combat.ts`) после `collision` — ровно та точка, которую фиксирует §4
  * `docs/tech/architecture.md`. OF-035 добавляет стадию `effects`
  * (`effects.ts`, тик персистентных зон урона — «лужа» Чистого) сразу после
- * `combat`, там же, где её резервирует докстринг архитектуры;
- * `quest`/`cleanup` — задачи после OF-035.
+ * `combat`, там же, где её резервирует докстринг архитектуры. OF-052
+ * добавляет `entityCollision` (`entity-collision.ts`, осевой откат к
+ * `prevX/prevY` между парами `collidable`-сущностей — герой/враги/босс
+ * физически не проходят друг сквозь друга) сразу после `collision` (стены
+ * уже разрешены) и до `combat`, `docs/design/entity-collision-of-052.md`
+ * §2.2; `quest`/`cleanup` — задачи после OF-035.
  */
 
 import type { InputSnapshot } from '../../core/input';
@@ -20,6 +24,7 @@ import { pickArenaPoint, resolveBossAttack } from './boss-ai';
 import { collisionSystem } from './collision';
 import { combatSystem, createWeaponRuntimeState, createWeaponsComponent } from './combat';
 import { effectsSystem, spawnHazardZone } from './effects';
+import { entityCollisionSystem } from './entity-collision';
 import { inputControlSystem } from './input-control';
 import { interactionSystem } from './interaction';
 import { movementSystem } from './movement';
@@ -34,6 +39,7 @@ export {
   isEnemyWeaknessActive,
   movementSystem,
   collisionSystem,
+  entityCollisionSystem,
   combatSystem,
   createWeaponsComponent,
   createWeaponRuntimeState,
@@ -52,6 +58,7 @@ export const SYSTEM_ORDER: readonly System[] = [
   aiSystem,
   movementSystem,
   collisionSystem,
+  entityCollisionSystem,
   combatSystem,
   effectsSystem,
   interactionSystem,

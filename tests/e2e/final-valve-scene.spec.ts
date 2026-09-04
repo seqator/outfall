@@ -45,6 +45,94 @@ async function closePledgeDialog(page: Page): Promise<void> {
   }
 }
 
+/**
+ * OF-052 (`docs/design/entity-collision-of-052.md` §5.5) — прямой репро
+ * трюка Duxa (`duxa-review-vs-6..-9`): телепорт на (21,11), зажатое
+ * движение точно на (21,2.3) — по прямой линии, которая раньше проходила
+ * ровно через клетку Босса-задвижки (`spawn_boss_zadvizhka`, (21,8),
+ * `public/data/maps/truba_final.json`). До фикса герой физически проходил
+ * насквозь через тело босса, ни разу не будучи атакованным в ответ. Теперь
+ * `entityCollisionSystem` (осевой откат к `prevX/prevY`, тот же приём, что
+ * уже `collisionSystem` для стен) обязана остановить героя на дистанции не
+ * меньше суммы радиусов героя и врага (`DEFAULT_HERO_RADIUS=0.3` +
+ * `DEFAULT_ENEMY_RADIUS=0.35` = 0.65, `map-loader.ts`/`ai.ts`) до того, как
+ * он пересечёт y-координату босса.
+ *
+ * Позиция героя читается напрямую из мира через `window.__outfallDebug.
+ * getHeroPosition()` (тот же приём, что и `hero-movement.spec.ts`), не
+ * парсингом HUD/скриншота. Позиция босса (21,8) не читается через отдельный
+ * debug-хук (такого нет) — она фиксирована по контракту: Босс-задвижка
+ * стационарен (`role: 'boss'`, `moveSpeed: 0`, `isStationaryRole`,
+ * `ai.ts`) и не двигается независимо от происходящего в этом тесте — тот
+ * же инвариант, на который прямо опирается §2.3 документа-дизайна.
+ */
+function getHeroPosition(page: Page): Promise<{ x: number; y: number } | null> {
+  return page.evaluate(() => window.__outfallDebug?.getHeroPosition() ?? null);
+}
+
+/** Держит клавишу, пока позиция героя по оси `axis` не перестанет меняться между опросами (герой физически упёрся во что-то и встал), тот же приём, что `hero-movement.spec.ts: holdKeyUntilStable`. */
+async function holdKeyUntilStable(
+  page: Page,
+  key: string,
+  axis: 'x' | 'y',
+): Promise<{ x: number; y: number } | null> {
+  await page.keyboard.down(key);
+  let previous = await getHeroPosition(page);
+  let stable = false;
+  const deadline = Date.now() + 20_000;
+  while (Date.now() < deadline) {
+    await page.waitForTimeout(300);
+    const current = await getHeroPosition(page);
+    if (previous && current && Math.abs(current[axis] - previous[axis]) < 1e-6) {
+      stable = true;
+      previous = current;
+      break;
+    }
+    previous = current;
+  }
+  await page.keyboard.up(key);
+  expect(stable).toBe(true);
+  return previous;
+}
+
+const BOSS_Y = 8;
+/** `DEFAULT_HERO_RADIUS` (0.3, `map-loader.ts`) + `DEFAULT_ENEMY_RADIUS` (0.35, `ai.ts`). */
+const SUM_OF_RADII = 0.65;
+
+test('трюк Duxa (21,11)→(21,2.3): герой физически останавливается перед боссом, не проходит насквозь (OF-052)', async ({
+  page,
+}) => {
+  test.setTimeout(30_000);
+  const consoleErrors: string[] = [];
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') consoleErrors.push(msg.text());
+  });
+  page.on('pageerror', (err) => consoleErrors.push(String(err)));
+
+  await reachFinalValveScene(page);
+
+  await page.evaluate(() => window.__outfallDebug?.teleportHero(21, 11));
+  const start = await getHeroPosition(page);
+  expect(start?.x).toBeCloseTo(21, 0);
+  expect(start?.y).toBeCloseTo(11, 0);
+
+  // KeyW = движение по -Y (`src/input/dom-input.ts: KeyW: [0, -1]`) — ровно
+  // направление трюка Duxa (11 → 2.3).
+  const atWall = await holdKeyUntilStable(page, 'KeyW', 'y');
+
+  expect(atWall).not.toBeNull();
+  // Герой останавливается НЕ доходя до клетки босса — дистанция до неё не
+  // меньше суммы радиусов, вплоть до плавающей погрешности одного тика.
+  expect(atWall!.y - BOSS_Y).toBeGreaterThanOrEqual(SUM_OF_RADII - 1e-6);
+  // И не застрял где-то далеко на старте — реально сдвинулся с (21,11).
+  expect(atWall!.y).toBeLessThan(11);
+  // Не проскочил цель трюка (2.3) — если бы проскочил, это значило бы, что
+  // коллизия не сработала вовсе (баг воспроизведён, а не починен).
+  expect(atWall!.y).toBeGreaterThan(2.3);
+
+  expect(consoleErrors).toEqual([]);
+});
+
 test('присяга Энергосбыту → держать E у задвижки даёт «второй сброс»', async ({ page }) => {
   test.setTimeout(30_000);
   const consoleErrors: string[] = [];
