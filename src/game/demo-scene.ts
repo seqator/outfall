@@ -31,12 +31,20 @@
  *
  * `main.ts` — единственное место, которое трогает DOM напрямую; эта функция
  * получает уже готовые элементы и дальше сама ничего в `document` не ищет.
+ *
+ * OF-049 подключает сцену выбора в зоне E (Родион): раньше это был обычный
+ * диалог на два пункта без давления времени — P1 во всех трёх рецензиях
+ * duxa-simulator (`docs/planerka/03-vs/duxa-review-vs.md` → `-vs-2.md` →
+ * `-vs-3.md`). Спека — `docs/levels/01-truba.md` §11 (game-designer):
+ * реалтайм-оверлей поверх геймплея (не модальный диалог), держать `E` 6с —
+ * «вытащить», нажать `F` — «снять ключ», бездействие/таймаут — честный
+ * форс-исход «ключ». Реализация ниже — блок «Сцена Родиона».
  */
 
 import { createAudioEngine, type AudioEngine } from '../audio';
 import { createEventBus, createLoop, createSeededRng, createWorld } from '../core';
 import type { EntityId, World } from '../core/world';
-import { MapSchema, type GameMap, DialogSchema, type Dialog } from '../data/schemas';
+import { MapSchema, type GameMap, DialogSchema, type Dialog, type Effect } from '../data/schemas';
 import { createDomInputSource, type DomInputHandle } from '../input';
 import { clampToMapBounds, createCamera, followTarget } from '../render';
 import { PixiRenderer } from '../render/pixi';
@@ -49,7 +57,7 @@ import {
 } from '../sim';
 import { createFpsOverlay } from '../ui';
 import { createBrowserRaf } from './browser-raf';
-import { createDialogueScreen, createGameState, type GameState } from './dialogue';
+import { applyEffects, createDialogueScreen, createGameState, type GameState } from './dialogue';
 import { createI18n, loadI18nDictionary, type I18n } from './i18n';
 import {
   addItem,
@@ -112,6 +120,8 @@ declare global {
       teleportHero(x: number, y: number): void;
       /** Число живых ECS-сущностей врагов — для e2e-теста триггерной волны (`tests/e2e/trigger-chain.spec.ts`). */
       getEnemyCount(): number;
+      /** Значение флага `gameState` (диалоги/сцена Родиона) — для e2e-проверки исхода сцены выбора (`tests/e2e/rodion-scene.spec.ts`), не требует парсить текст HUD. */
+      getFlag(key: string): boolean | number | string | undefined;
     };
   }
 }
@@ -218,10 +228,17 @@ async function loadRealTrubaMap(): Promise<GameMap> {
  * физически») — `prolog-serega.json` закрывает это одной репликой в его
  * голосе из `world-bible.md` §2.1 («балагур, называет раков крупными и
  * мелкими, как на рынке»).
+ *
+ * `npc.rodion` сюда намеренно не входит: раньше `E` открывал обычный
+ * диалог `prolog-vybor.json` (модальное меню на два пункта без давления
+ * времени — сам P1 из всех трёх рецензий). OF-049 заменяет его реалтайм-
+ * сценой «Сцена Родиона» ниже (`docs/levels/01-truba.md` §11); файл
+ * `prolog-vybor.json` остаётся на диске нетронутым — это фикстура
+ * регрессионного снапшот-теста `dialog-runner.test.ts` на обход графа
+ * диалога, просто больше не используется рантаймом демо-сцены.
  */
 const NPC_DIALOG_FILES: Readonly<Record<string, string>> = {
   'npc.sanitar': 'prolog-smotritel',
-  'npc.rodion': 'prolog-vybor',
   'npc.serega_sachok': 'prolog-serega',
 };
 
@@ -257,6 +274,25 @@ const GAMEPLAY_ZOOM = 1.5;
 
 /** Через сколько игрок возрождается после смерти — `docs/qa/vs-report.md` P0 «смерть без обратной связи»: без этого герой замирает навсегда. */
 const RESPAWN_DELAY_MS = 2500;
+
+/**
+ * Числа сцены Родиона (зона E, `trigger_t4`/`trigger_t5`) — из
+ * `docs/levels/01-truba.md` §11 (game-designer, аддендум, закрывает P1 всех
+ * трёх рецензий duxa-simulator). Спека фиксирует именно эти значения, менять
+ * их без обновления §11 нельзя — числа завязаны на баланс «6с держать при
+ * таймере 15с», подробности выбора см. в самом документе.
+ */
+const RODION_NPC_ID = 'npc.rodion';
+/** `T_scene` — общий таймер сцены от момента `trigger_t4`. */
+const RODION_SCENE_DURATION_MS = 15_000;
+/** `T_hold` — сколько секунд подряд держать `E`, чтобы вытащить Родиона (исход `spas`). */
+const RODION_HOLD_THRESHOLD_SEC = 6;
+/** `T_snap` — фиксированная, уже необратимая длительность «снять ключ» (`F`, исход `klyuch`). */
+const RODION_SNAP_DURATION_MS = 1_500;
+/** Как долго после сорвавшегося удержания показывать «Не удержал!», пока HUD не вернётся к обычной строке таймера. */
+const RODION_RELEASE_MESSAGE_MS = 1_000;
+/** Как долго после исхода (`spas`/`klyuch`/таймаут) держать финальную строку на HUD. */
+const RODION_OUTCOME_MESSAGE_MS = 4_000;
 
 export async function createDemoScene(
   root: HTMLElement,
@@ -441,7 +477,12 @@ export async function createDemoScene(
   }
 
   function openInventory(): void {
-    if (activeDialogue || activeInventory) return;
+    // Сцена Родиона — реалтайм-таймер, который сознательно не ставится на
+    // паузу меню (`docs/levels/01-truba.md` §11.2): открыть инвентарь и
+    // «поставить игру на паузу» посреди спасения было бы честной дырой в
+    // давлении времени, поэтому экран инвентаря здесь просто недоступен,
+    // пока сцена не разрешена — так же, как он недоступен во время диалога.
+    if (activeDialogue || activeInventory || (rodionSceneActive && !rodionResolved)) return;
     loop.stop();
     activeInventory = createInventoryScreen(root, inventoryState, {
       registry: itemRegistry,
@@ -462,6 +503,165 @@ export async function createDemoScene(
     else openInventory();
   };
   window.addEventListener('keydown', handleInventoryKey);
+
+  // Сцена Родиона (зона E, OF-049, `docs/levels/01-truba.md` §11): раньше
+  // `E` рядом с Родионом открывал обычный диалог `prolog-vybor.json` —
+  // модальное меню на два пункта без единого намёка на давление времени,
+  // хотя весь пролог концепта построен вокруг «выбор под водой за секунды»
+  // (P1 во всех трёх рецензиях duxa-simulator). Теперь это реалтайм-оверлей
+  // поверх обычного геймплея: держать `E` `RODION_HOLD_THRESHOLD_SEC` секунд
+  // подряд в радиусе Родиона — «вытащить» (`spas`); нажать `F` — «снять ключ
+  // и уйти» (`klyuch`, необратимо через `RODION_SNAP_DURATION_MS`); бездействие
+  // до истечения `RODION_SCENE_DURATION_MS` — честный форс-исход `klyuch` с
+  // флагом `flag.truba.choice_timeout` (§11.5 п.1; про п.2 — форс по входу в
+  // `trigger_t5` — см. отдельный комментарий у обработки триггеров ниже, он
+  // не реализован буквально из-за геометрии карты). `flag.prolog_vybor` —
+  // то же самое поле, которое уже читает `docs/narrative/main-quest.md` §2
+  // (Q2), смысл трёх исходов не меняется.
+  let rodionSceneActive = false;
+  let rodionResolved = false;
+  let rodionSceneStartMs = 0;
+  let rodionHoldProgressSec = 0;
+  let rodionEHeldRaw = false;
+  let rodionSnapUntilMs: number | null = null;
+  let rodionReleasedUntilMs: number | null = null;
+  let rodionOutcomeMessage: string | null = null;
+  let rodionOutcomeUntilMs: number | null = null;
+
+  /** Хero в радиусе `npc.rodion` (тот же `INTERACT_RADIUS`, что и обычный диалог с NPC, §11.3). */
+  function isHeroNearRodion(): boolean {
+    const heroT = world.store('transform').get(hero);
+    if (!heroT) return false;
+    for (const marker of loadedMap.npcEntities) {
+      const spawnMarker = world.store('spawnMarker').get(marker);
+      const transform = world.store('transform').get(marker);
+      if (!spawnMarker || !transform || spawnMarker.refId !== RODION_NPC_ID) continue;
+      const dx = transform.x - heroT.x;
+      const dy = transform.y - heroT.y;
+      return dx * dx + dy * dy <= INTERACT_RADIUS * INTERACT_RADIUS;
+    }
+    return false;
+  }
+
+  /**
+   * Фиксирует исход сцены (один раз — `rodionResolved` защищает от повторного
+   * применения эффектов). `klyuch` (осознанный и по таймауту) кладёт латунный
+   * ключ и в `gameState.inventory` (для условий диалогов/квестов через
+   * `interpreter.ts`), и в настоящий `inventoryState` (чтобы предмет реально
+   * появился на экране `I`, а не только в абстрактном порте интерпретатора —
+   * та же пара, что уже используется для стартовых расходников выше).
+   */
+  function resolveRodionOutcome(outcome: 'spas' | 'klyuch', timeout: boolean): void {
+    if (rodionResolved) return;
+    rodionResolved = true;
+    rodionSceneActive = false;
+    rodionSnapUntilMs = null;
+    rodionHoldProgressSec = 0;
+    rodionReleasedUntilMs = null;
+
+    const effects: Effect[] =
+      outcome === 'spas'
+        ? [{ op: 'setFlag', key: 'flag.prolog_vybor', value: 'spas' }]
+        : [
+            { op: 'setFlag', key: 'flag.prolog_vybor', value: 'klyuch' },
+            { op: 'giveItem', item: 'item.quest_klyuch_shlyuza', count: 1 },
+          ];
+    if (timeout) effects.push({ op: 'setFlag', key: 'flag.truba.choice_timeout', value: true });
+    gameState = applyEffects(gameState, effects);
+
+    if (outcome === 'klyuch') {
+      inventoryState = addItem(inventoryState, itemRegistry, {
+        itemId: 'item.quest_klyuch_shlyuza',
+        quantity: 1,
+        uid: nextDevUid(),
+      }).state;
+      activeInventory?.update(inventoryState);
+    }
+
+    rodionOutcomeMessage = timeout
+      ? 'Вода сомкнулась над Родионом. Ключ остался зажат у тебя в кулаке.'
+      : outcome === 'spas'
+        ? 'Родион свободен. Тащишь его наверх, к воздуху.'
+        : 'Латунный ключ у тебя. Родион уходит под воду.';
+    rodionOutcomeUntilMs = performance.now() + RODION_OUTCOME_MESSAGE_MS;
+  }
+
+  /** Раз в кадр, пока сцена активна и не разрешена: прогресс удержания/снятия ключа и таймаут (§11.2–11.5). Вызывается только вне паузы диалога/инвентаря — `loop.onFrame` не тикает во время неё. */
+  function updateRodionScene(now: number, frameDtMs: number): void {
+    if (rodionSnapUntilMs !== null) {
+      if (now >= rodionSnapUntilMs) resolveRodionOutcome('klyuch', false);
+    } else if (rodionEHeldRaw && isHeroNearRodion()) {
+      rodionHoldProgressSec += frameDtMs / 1000;
+      rodionReleasedUntilMs = null;
+      if (rodionHoldProgressSec >= RODION_HOLD_THRESHOLD_SEC) {
+        resolveRodionOutcome('spas', false);
+        return;
+      }
+    } else if (rodionHoldProgressSec > 0) {
+      // Отпустил `E` раньше времени или вышел из радиуса — прогресс
+      // сбрасывается в 0, а не затухает (§11.3: «держишь — тащишь, отпустил
+      // — начинай заново», осознанно простая модель).
+      rodionHoldProgressSec = 0;
+      rodionReleasedUntilMs = now + RODION_RELEASE_MESSAGE_MS;
+    }
+
+    if (!rodionResolved && now - rodionSceneStartMs >= RODION_SCENE_DURATION_MS) {
+      resolveRodionOutcome('klyuch', true);
+    }
+  }
+
+  /** Строка HUD текущего состояния сцены (§11.7) — `null`, если сцена не идёт и нет свежего исхода. */
+  function computeRodionHud(now: number): string | null {
+    if (rodionOutcomeUntilMs !== null) {
+      if (now < rodionOutcomeUntilMs) return rodionOutcomeMessage;
+      rodionOutcomeUntilMs = null;
+      rodionOutcomeMessage = null;
+    }
+    if (!rodionSceneActive || rodionResolved) return null;
+    if (rodionSnapUntilMs !== null) return 'Срываешь цепочку с шеи Родиона…';
+    if (rodionReleasedUntilMs !== null && now < rodionReleasedUntilMs) {
+      return 'Не удержал! Родион дёрнулся под водой — начни заново.';
+    }
+    if (rodionHoldProgressSec > 0) {
+      return `Тащишь Родиона… ${Math.floor(rodionHoldProgressSec)}/${RODION_HOLD_THRESHOLD_SEC}с. Не отпускай!`;
+    }
+    const tRemainingSec = Math.ceil(
+      Math.max(0, RODION_SCENE_DURATION_MS - (now - rodionSceneStartMs)) / 1000,
+    );
+    return `Родион тонет: ${tRemainingSec}с — E держать, чтобы вытащить. F — сорвать ключ и уйти.`;
+  }
+
+  // `E`/`F` читаются отдельным сырым слушателем, а не через общий
+  // `DomInputSource`/ECS `interactionSystem`: тому нужно continuous-состояние
+  // «зажата ли клавиша прямо сейчас» (удержание), а не одноразовый `pressed`
+  // на тик — повторный вызов `input.snapshot()` отсюда испортил бы
+  // одноразовый набор `pressed` для настоящего тика симуляции (см. докстринг
+  // `sim/systems/interaction.ts`). Тот же приём, что уже использует
+  // `handleSaveLoadKey`/`handleInventoryKey` в этом файле.
+  const handleRodionKeyDown = (e: KeyboardEvent): void => {
+    if (e.code === 'KeyE') {
+      rodionEHeldRaw = true;
+      return;
+    }
+    if (e.code !== 'KeyF') return;
+    if (!rodionSceneActive || rodionResolved || rodionSnapUntilMs !== null) return;
+    if (!isHeroNearRodion()) return;
+    rodionSnapUntilMs = performance.now() + RODION_SNAP_DURATION_MS;
+    rodionHoldProgressSec = 0;
+    rodionReleasedUntilMs = null;
+  };
+  const handleRodionKeyUp = (e: KeyboardEvent): void => {
+    if (e.code === 'KeyE') rodionEHeldRaw = false;
+  };
+  const handleRodionBlur = (): void => {
+    // Фокус ушёл со страницы — та же защита от «залипшей» клавиши, что уже
+    // делает `dom-input.ts` для обычного ввода (Alt+Tab не должен оставить
+    // удержание вечно активным).
+    rodionEHeldRaw = false;
+  };
+  window.addEventListener('keydown', handleRodionKeyDown);
+  window.addEventListener('keyup', handleRodionKeyUp);
+  window.addEventListener('blur', handleRodionBlur);
 
   // OF-019: ручное сохранение/загрузка — F5/F9. Полноценный UI слотов не в
   // скоупе этой задачи; здесь минимум, достаточный, чтобы «сейв → загрузка →
@@ -569,12 +769,32 @@ export async function createDemoScene(
       if (triggerResult.firedIds.includes('trigger_t3')) {
         spawnEnemiesFromMarkers(world, loadedMap.enemySpawnEntities);
       }
+      if (triggerResult.firedIds.includes('trigger_t4') && !rodionResolved) {
+        rodionSceneActive = true;
+        rodionSceneStartMs = now;
+      }
       // `prolog-kruchok.json` сам заканчивается узлом «title» (speaker
       // «narrator», текст — «Глава 1. Труба») — титр главы уже часть
       // диалога, отдельного оверлея поверх сцены не нужно.
       if (triggerResult.firedIds.includes('trigger_t6') && hookDialog) {
         openDialogue(hookDialog);
       }
+
+      if (rodionSceneActive && !rodionResolved) {
+        updateRodionScene(now, frameDtMs);
+      }
+      // §11.5 п.2 карты (форс-развязка при входе в T5 без разрешённой сцены)
+      // сознательно не реализован буквально: `trigger_t5` стоит в (30,54) с
+      // радиусом 3, а Родион — в (30,52), то есть его собственная точка уже
+      // внутри радиуса T5 (расстояние 2 ≤ 3). Взятая по спеке буквально,
+      // форс-развязка срабатывала бы в момент простого подхода к Родиону для
+      // интеракции — раньше, чем игрок вообще успевает нажать `E`/`F` (баг,
+      // пойманный `tests/e2e/rodion-scene.spec.ts` при реализации). Таймер
+      // `RODION_SCENE_DURATION_MS` (15с, §11.5 п.1) — тот же самый честный
+      // форс-исход, не зависит от позиции игрока и уже полностью гарантирует
+      // «сцена не подвиснет навсегда» без этого дополнительного триггера;
+      // `trigger_t5` продолжает штатно ставить `flag.truba.zone_e_closed`
+      // через собственный эффект в `truba.json`, это не убрано.
     }
 
     // Смерть героя (OF-016 останавливает движение на HP≤0, `input-control.ts`,
@@ -621,6 +841,8 @@ export async function createDemoScene(
         if (gameState.flags['flag.truba.water_rising'] === true) hud += ' | Вода поднимается';
       }
     }
+    const rodionHud = computeRodionHud(now);
+    if (rodionHud !== null) hud = rodionHud + ' | ' + hud;
     if (heroDeadSinceMs !== null) hud = 'ВЫ ПОГИБЛИ… возрождение | ' + hud;
     if (hintUntilMs !== null && performance.now() < hintUntilMs) {
       hud = 'WASD — идти, ЛКМ — стрелять, E — говорить, I — инвентарь | ' + hud;
@@ -654,6 +876,9 @@ export async function createDemoScene(
       for (const _entity of world.query('enemy')) count += 1;
       return count;
     },
+    getFlag(key: string): boolean | number | string | undefined {
+      return gameState.flags[key];
+    },
   };
 
   return {
@@ -662,6 +887,9 @@ export async function createDemoScene(
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('keydown', handleSaveLoadKey);
       window.removeEventListener('keydown', handleInventoryKey);
+      window.removeEventListener('keydown', handleRodionKeyDown);
+      window.removeEventListener('keyup', handleRodionKeyUp);
+      window.removeEventListener('blur', handleRodionBlur);
       unsubscribeFrame();
       unsubscribeHit();
       unsubscribeDeath();
