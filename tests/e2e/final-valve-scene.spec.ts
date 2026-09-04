@@ -26,6 +26,25 @@ async function reachFinalValveScene(page: Page): Promise<void> {
   await expect(page.locator('#fps-overlay')).toHaveText(/FPS: \d+/, { timeout: 5000 });
 }
 
+/**
+ * Закрывает диалог присяги, кликая «...» столько раз, сколько узлов между
+ * этим и `next: null` — не обязательно один (OF-054-follow-up, `duxa-review-
+ * vs-8.md` §P1: узел `prisyaga_end` теперь ветвится на промежуточный
+ * `shtamm0_ne_v_kurse` — мягкую реплику лидера, если игрок не был у
+ * Веденеева в НИИ, `flag.shtamm0_pravda` не установлен — что верно для всех
+ * тестов этого файла, они не заходят в Акт 2 перед присягой). Не завязано на
+ * точное число кликов — устойчиво к тому, наступит ли `flag.shtamm0_pravda`
+ * в будущем тесте этого файла.
+ */
+async function closePledgeDialog(page: Page): Promise<void> {
+  const mnogotochie = page.getByRole('button', { name: '...' });
+  for (let i = 0; i < 3; i += 1) {
+    await expect(mnogotochie).toBeVisible({ timeout: 3000 });
+    await mnogotochie.click();
+    if ((await mnogotochie.count()) === 0) return;
+  }
+}
+
 test('присяга Энергосбыту → держать E у задвижки даёт «второй сброс»', async ({ page }) => {
   test.setTimeout(30_000);
   const consoleErrors: string[] = [];
@@ -41,10 +60,8 @@ test('присяга Энергосбыту → держать E у задвиж
   await expect(page.locator('#fps-overlay')).toContainText('[E]', { timeout: 5000 });
   await page.keyboard.press('KeyE');
   await page.getByRole('button', { name: 'Присягаю Энергосбыту.' }).click();
-  const mnogotochie = page.getByRole('button', { name: '...' });
-  await expect(mnogotochie).toBeVisible({ timeout: 3000 });
-  await mnogotochie.click();
   expect(await page.evaluate(() => window.__outfallDebug?.getFlag('flag.storona'))).toBe('energosbyt');
+  await closePledgeDialog(page);
 
   // `trigger_final_valve` — (21,5), радиус 3.
   await page.evaluate(() => window.__outfallDebug?.teleportHero(21, 5));
@@ -94,7 +111,7 @@ test('присяга Энергосбыту без репутации → чес
   await page.evaluate(() => window.__outfallDebug?.teleportHero(20, 21));
   await page.keyboard.press('KeyE');
   await page.getByRole('button', { name: 'Присягаю Энергосбыту.' }).click();
-  await page.getByRole('button', { name: '...' }).click();
+  await closePledgeDialog(page);
 
   await page.evaluate(() => window.__outfallDebug?.teleportHero(21, 5));
   await expect(page.locator('#fps-overlay')).toContainText('Задвижка перед тобой', { timeout: 5000 });
@@ -129,7 +146,7 @@ test('присяга Энергосбыту → F доводит вентиль 
   await page.evaluate(() => window.__outfallDebug?.teleportHero(20, 21));
   await page.keyboard.press('KeyE');
   await page.getByRole('button', { name: 'Присягаю Энергосбыту.' }).click();
-  await page.getByRole('button', { name: '...' }).click();
+  await closePledgeDialog(page);
 
   await page.evaluate(() => window.__outfallDebug?.teleportHero(21, 5));
   await expect(page.locator('#fps-overlay')).toContainText('Задвижка перед тобой', { timeout: 5000 });
@@ -162,7 +179,7 @@ test('присяга Чистым → держать E даёт «взрыв п�
   await expect(page.locator('#fps-overlay')).toContainText('[E]', { timeout: 5000 });
   await page.keyboard.press('KeyE');
   await page.getByRole('button', { name: 'Присягаю Чистым.' }).click();
-  await page.getByRole('button', { name: '...' }).click();
+  await closePledgeDialog(page);
   expect(await page.evaluate(() => window.__outfallDebug?.getFlag('flag.storona'))).toBe('chistye');
 
   await page.evaluate(() => window.__outfallDebug?.teleportHero(21, 5));

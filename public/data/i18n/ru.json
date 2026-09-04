@@ -288,21 +288,25 @@
   "dialog.final_palych.choice.prisyagnut": "Присягаю Прогресс-2.",
   "dialog.final_palych.choice.eshche_podumayu": "Ещё подумаю.",
   "dialog.final_palych.prisyaga_end": "Тогда труба — твоя забота теперь тоже. Как и всё остальное в этом дворе.",
+  "dialog.final_palych.shtamm0_ne_v_kurse": "Ты хоть в курсе, что откопали в НИИ, пока тебя носило? Нет? Ну, узнаешь — как я в своё время, когда было поздно.",
 
   "dialog.final_grinya.start": "Председателя больше нет — ты знаешь, почему. Кооператив всё равно нужен. Ты с нами?",
   "dialog.final_grinya.choice.prisyagnut": "Присягаю Прогресс-2.",
   "dialog.final_grinya.choice.ne_seychas": "Не сейчас.",
   "dialog.final_grinya.prisyaga_end": "Значит, записываю тебя в список. Список у нас теперь короткий, но длинный.",
+  "dialog.final_grinya.shtamm0_ne_v_kurse": "НИИ, Веденеев, штамм-0 — ты хоть в курсе? Нет. Ладно, впишу задним числом, у нас и так с бумагами не сходится.",
 
   "dialog.final_zoya.start": "Тариф не спрашивает согласия — но присяга спрашивает. Ты с Энергосбытом или нет?",
   "dialog.final_zoya.choice.prisyagnut": "Присягаю Энергосбыту.",
   "dialog.final_zoya.choice.eshche_podumayu": "Ещё подумаю.",
   "dialog.final_zoya.prisyaga_end": "Записано. Значит, у Трубы теперь будет счётчик — и ты рядом с ним.",
+  "dialog.final_zoya.shtamm0_ne_v_kurse": "В НИИ ты, я гляжу, не заглядывал. Присяга справки не требует — но по-хорошему такая графа не помешала бы.",
 
   "dialog.final_solomin.start": "Вода приняла многих. Примет и тебя — если ты сам захочешь остаться.",
   "dialog.final_solomin.choice.prisyagnut": "Присягаю Чистым.",
   "dialog.final_solomin.choice.eshche_podumayu": "Ещё подумаю.",
   "dialog.final_solomin.prisyaga_end": "Тогда пойдём к плотине вместе. Река давно ждёт своего часа.",
+  "dialog.final_solomin.shtamm0_ne_v_kurse": "Ты присягнул воде, не спросив, что в ней течёт. Любопытство было бы к лицу больше, чем вера.",
 
   "dialog.final_vedeneev.start": "Всё-таки решились. Что ж — я своё уже сделал, дальше без меня.",
   "dialog.final_vedeneev.choice.pust_uhodit": "Пусть уходит.",

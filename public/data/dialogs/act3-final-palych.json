@@ -26,6 +26,22 @@
     "prisyaga_end": {
       "speaker": "npc.palych_final",
       "textKey": "dialog.final_palych.prisyaga_end",
+      "choices": [
+        {
+          "textKey": "dialog.final.choice.mnogotochie",
+          "next": "shtamm0_ne_v_kurse",
+          "condition": { "op": "not", "condition": { "op": "flag", "key": "flag.shtamm0_pravda", "eq": true } }
+        },
+        {
+          "textKey": "dialog.final.choice.mnogotochie",
+          "next": null,
+          "condition": { "op": "flag", "key": "flag.shtamm0_pravda", "eq": true }
+        }
+      ]
+    },
+    "shtamm0_ne_v_kurse": {
+      "speaker": "npc.palych_final",
+      "textKey": "dialog.final_palych.shtamm0_ne_v_kurse",
       "choices": [{ "textKey": "dialog.final.choice.mnogotochie", "next": null }]
     },
     "neytralitet_end": {
