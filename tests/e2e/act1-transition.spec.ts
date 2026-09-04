@@ -9,18 +9,22 @@ import { startGame } from './helpers';
  * геометрии каждой карты отдельно данными, не переход между картами вживую).
  *
  * `?map=garazhi` — прямой заход на карту Акта 1 (см. докстринг
- * `resolveInitialMapId` в `demo-scene.ts`): у «Трубы» в текущем графе
- * (`public/data/maps/truba.json`) нет исходящего `exit` куда-либо кроме
- * самой себя (`exit_to_river`, заглушка конца пролога, не в скоупе этой
- * задачи), поэтому реальный e2e-путь в Акт 1 начинается прямым заходом, а
- * дальше идёт по `exits[]` графа Акта 1 (Гаражи → Плотина → Панели),
- * связанному level-designer (OF-033).
+ * `resolveInitialMapId` в `demo-scene.ts`) для теста, который проверяет
+ * контракты «выход у двери переключает карту» и «NPC + E → диалог →
+ * эффект» точечно, без прогона всего пролога — дальше идёт по `exits[]`
+ * графа Акта 1 (Гаражи → Плотина → Панели), связанному level-designer
+ * (OF-033).
  *
  * Позиции NPC/exits — из `public/data/maps/{garazhi,plotina,paneli}.json`;
  * герой телепортируется вплотную к каждой точке (см. обоснование телепорта
- * в `dialogue.spec.ts` — этот тест проверяет контракты «выход у двери
- * переключает карту» и «NPC + E → диалог → эффект», не пешую навигацию по
- * геометрии уровня).
+ * в `dialogue.spec.ts`).
+ *
+ * Отдельный тест ниже («обычный запуск без ?map=...») проверяет то, что эти
+ * точечные тесты сознательно обходят стороной, — сквозной путь из пролога:
+ * седьмая рецензия duxa-simulator (`duxa-review-vs-7.md`, P0) нашла, что
+ * `truba.exit_to_river` вёл сам на себя, и обычный игрок без query-параметра
+ * физически не мог выйти из пролога в Акт 1. Фикс — `exit_to_river` теперь
+ * ведёт в `map.garazhi` (`OF-053`).
  */
 test('Q1: Гаражи → Плотина → Панели через exits[], диалог с Дядей Толей ставит flag.otrabotka_tolya', async ({
   page,
@@ -184,6 +188,42 @@ test('«Я кран»: убийство Палыча необратимо — п
   await page.waitForTimeout(300);
   await expect(page.locator('#fps-overlay')).not.toContainText('[E]', { timeout: 2000 });
   expect(await page.evaluate(() => window.__outfallDebug?.getFlag('rep.progress2'))).toBe(-100);
+
+  expect(consoleErrors).toEqual([]);
+});
+
+/**
+ * Регрессия на P0 из седьмой рецензии duxa-simulator (`duxa-review-vs-7.md`):
+ * обычный запуск (`startGame(page)`, без `?map=`, ровно как открыл бы
+ * ссылку зритель канала) доходил до `exit_to_river` в конце пролога
+ * «Труба» и упирался в тупик — `exit.toMap === map.id` был самоссылкой,
+ * `switchMap` явно отказывался переходить. Фикс данных —
+ * `truba.exit_to_river.toMap` теперь `map.garazhi` (`OF-053`); этот тест —
+ * единственный во всём наборе e2e, который проходит путь «титульник → ПОГНАЛИ
+ * → конец пролога → Акт 1» без единого query-параметра, как это сделал бы
+ * реальный зритель.
+ */
+test('обычный запуск без ?map=: конец пролога «Труба» выпускает в Акт 1 через exit_to_river', async ({ page }) => {
+  const consoleErrors: string[] = [];
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') consoleErrors.push(msg.text());
+  });
+  page.on('pageerror', (err) => consoleErrors.push(String(err)));
+
+  await startGame(page);
+  await expect(page.locator('#game-canvas')).toBeVisible();
+  await expect(page.locator('#fps-overlay')).toHaveText(/FPS: \d+/, { timeout: 5000 });
+  expect(await page.evaluate(() => window.__outfallDebug?.getMapId())).toBe('map.truba');
+
+  // `truba.exit_to_river` — (30,61) в `public/data/maps/truba.json`.
+  await page.evaluate(() => window.__outfallDebug?.teleportHero(30, 61));
+  await expect
+    .poll(() => page.evaluate(() => window.__outfallDebug?.getMapId()), { timeout: 8000 })
+    .toBe('map.garazhi');
+
+  const afterExit = await page.evaluate(() => window.__outfallDebug?.getHeroPosition());
+  expect(afterExit?.x).toBeGreaterThanOrEqual(0);
+  expect(afterExit?.y).toBeGreaterThanOrEqual(0);
 
   expect(consoleErrors).toEqual([]);
 });
