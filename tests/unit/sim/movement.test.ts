@@ -8,6 +8,7 @@ import {
   aiSystem,
   collisionSystem,
   combatSystem,
+  effectsSystem,
   inputControlSystem,
   interactionSystem,
   movementSystem,
@@ -18,7 +19,7 @@ function build() {
 }
 
 describe('sim/systems: SYSTEM_ORDER', () => {
-  it('порядок стадий: input → ai → movement → collision → combat → interaction (§4 architecture.md, OF-016/025)', () => {
+  it('порядок стадий: input → ai → movement → collision → combat → effects → interaction (§4 architecture.md, OF-016/025/035)', () => {
     expect(SYSTEM_ORDER.indexOf(inputControlSystem)).toBeLessThan(SYSTEM_ORDER.indexOf(aiSystem));
     expect(SYSTEM_ORDER.indexOf(aiSystem)).toBeLessThan(SYSTEM_ORDER.indexOf(movementSystem));
     expect(SYSTEM_ORDER.indexOf(movementSystem)).toBeLessThan(
@@ -27,10 +28,11 @@ describe('sim/systems: SYSTEM_ORDER', () => {
     expect(SYSTEM_ORDER.indexOf(collisionSystem)).toBeLessThan(
       SYSTEM_ORDER.indexOf(combatSystem),
     );
-    expect(SYSTEM_ORDER.indexOf(combatSystem)).toBeLessThan(
+    expect(SYSTEM_ORDER.indexOf(combatSystem)).toBeLessThan(SYSTEM_ORDER.indexOf(effectsSystem));
+    expect(SYSTEM_ORDER.indexOf(effectsSystem)).toBeLessThan(
       SYSTEM_ORDER.indexOf(interactionSystem),
     );
-    expect(SYSTEM_ORDER).toHaveLength(6);
+    expect(SYSTEM_ORDER).toHaveLength(7);
   });
 });
 

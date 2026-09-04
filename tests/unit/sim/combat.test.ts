@@ -4,6 +4,7 @@ import { createInputSnapshot, type InputSnapshot } from '../../../src/core/input
 import type { SeededRng } from '../../../src/core/rng';
 import { createSeededRng } from '../../../src/core/rng';
 import { createWorld, type EntityId, type World } from '../../../src/core/world';
+import type { PerkId } from '../../../src/sim/formulas/perks';
 import { spawnEnemy } from '../../../src/sim/systems/ai';
 import {
   combatSystem,
@@ -858,5 +859,169 @@ describe('sim/systems/combat: снаряды — выход за границу 
     expect(() => combatSystem(world, 1 / 60, attackInput())).not.toThrow();
     // Снаряд пролетает мимо мёртвого — цель не найдена, снаряд продолжает лететь.
     expect([...world.query('projectile')]).toHaveLength(1);
+  });
+});
+
+describe('sim/systems/combat: OF-035 — перки героя, читаемые через aggregatePerkEffects', () => {
+  function addPerks(
+    world: World,
+    hero: EntityId,
+    unlockedPerkIds: readonly PerkId[],
+    overrides: { lastStandAvailable?: boolean; guaranteedCritPending?: boolean } = {},
+  ): void {
+    world.store('perks').add(hero, {
+      unlockedPerkIds: [...unlockedPerkIds],
+      lastStandAvailable: overrides.lastStandAvailable ?? false,
+      guaranteedCritPending: overrides.guaranteedCritPending ?? false,
+    });
+  }
+
+  it('«Быстрые руки» ускоряет перезарядку на 25% (0,9 с вместо 1,2 с у «Огрызка»)', () => {
+    const world = build();
+    const hero = addHero(world, 0, 0);
+    addPerks(world, hero, ['perk.bystrye_ruki']);
+    const weapons = world.store('weapons').get(hero);
+    if (weapons) weapons.states['item.pistol_ogryzok'].ammo = 3;
+
+    combatSystem(world, 1 / 60, createInputSnapshot({ pressed: new Set(['reload']) }));
+
+    expect(world.store('weapons').get(hero)?.states['item.pistol_ogryzok'].reloadRemainingMs).toBeCloseTo(900, 6);
+  });
+
+  it('«Твёрдая рука» снижает разброс на бегу (предел КоэфДвижения 1,3 вместо 1,6 для «Дупла»)', () => {
+    // rng.next()=1 → максимальный офсет разброса (в одну сторону), второй
+    // next()=0.99 → без крита — так угол снаряда напрямую показывает разброс.
+    const withoutPerk = build(fakeRng([1, 0.99]));
+    const heroWithout = addHero(withoutPerk, 0, 0);
+    const weaponsWithout = withoutPerk.store('weapons').get(heroWithout);
+    if (weaponsWithout) weaponsWithout.equipped = 'item.shotgun_duplo';
+    combatSystem(withoutPerk, 1 / 60, attackInput({ moveX: 1, moveY: 0 }));
+    const projectileWithout = withoutPerk
+      .store('projectile')
+      .get([...withoutPerk.query('projectile')][0] as EntityId);
+
+    const withPerk = build(fakeRng([1, 0.99]));
+    const heroWith = addHero(withPerk, 0, 0);
+    addPerks(withPerk, heroWith, ['perk.tvyordaya_ruka']);
+    const weaponsWith = withPerk.store('weapons').get(heroWith);
+    if (weaponsWith) weaponsWith.equipped = 'item.shotgun_duplo';
+    combatSystem(withPerk, 1 / 60, attackInput({ moveX: 1, moveY: 0 }));
+    const projectileWith = withPerk.store('projectile').get([...withPerk.query('projectile')][0] as EntityId);
+
+    // Меньший предел КоэфДвижения (1,3 вместо 1,6) даёт меньший разброс —
+    // снаряд с перком летит ближе к направлению взгляда (dirX ближе к 1).
+    expect(projectileWithout?.dirX).toBeCloseTo(0.9867, 3);
+    expect(projectileWith?.dirX).toBeCloseTo(0.9912, 3);
+    expect(projectileWith?.dirX ?? 0).toBeGreaterThan(projectileWithout?.dirX ?? 0);
+  });
+
+  it('«Последний патрон»: guaranteedCritPending форсирует крит следующего выстрела и гасится после использования', () => {
+    const world = build(fakeRng(NO_SPREAD_NO_CRIT)); // rng сам по себе НЕ дал бы крит
+    const hero = addHero(world, 0, 0);
+    addPerks(world, hero, ['perk.posledniy_patron'], { guaranteedCritPending: true });
+
+    combatSystem(world, 1 / 60, attackInput());
+
+    const [projectileId] = [...world.query('projectile')];
+    expect(world.store('projectile').get(projectileId as EntityId)?.crit).toBe(2);
+    expect(world.store('perks').get(hero)?.guaranteedCritPending).toBe(false);
+  });
+
+  it('«Крепкий хребет»/«Оба кулака» умножают урон в рукопашной поверх формулы §5.1', () => {
+    const world = build(fakeRng(NO_SPREAD_NO_CRIT));
+    const hero = addHero(world, 0, 0);
+    addPerks(world, hero, ['perk.krepkiy_khrebet', 'perk.oba_kulaka']);
+    const weapons = world.store('weapons').get(hero);
+    if (weapons) weapons.equipped = 'item.wrench_kran';
+    const enemy = spawnEnemy(world, 'enemy.ohrana_progress2', { x: 0.5, y: 0 });
+
+    combatSystem(world, 1 / 60, attackInput());
+
+    // База §5.1 без перков = 16 (см. тест выше); ×1,15×1,5 = 27,6
+    expect(world.store('health').get(enemy)?.hp).toBeCloseTo(30 - 16 * 1.15 * 1.5, 6);
+  });
+
+  it('без компонента perks — поведение идентично отсутствию перков (регрессия)', () => {
+    const world = build(fakeRng(NO_SPREAD_NO_CRIT));
+    const hero = addHero(world, 0, 0);
+    const weapons = world.store('weapons').get(hero);
+    if (weapons) weapons.equipped = 'item.wrench_kran';
+    const enemy = spawnEnemy(world, 'enemy.ohrana_progress2', { x: 0.5, y: 0 });
+
+    combatSystem(world, 1 / 60, attackInput());
+
+    expect(world.store('health').get(enemy)?.hp).toBe(14);
+  });
+});
+
+describe('sim/systems/combat: OF-035 — начисление опыта убийце (formulas/progression.ts)', () => {
+  function addProgression(world: World, hero: EntityId): void {
+    world.store('progression').add(hero, { xp: 0, level: 1, skillPoints: 0, smekalka: 5 });
+  }
+
+  it('убийство врага снарядом начисляет опыт по xpLevel/danger врага', () => {
+    const world = build(fakeRng(NO_SPREAD_NO_CRIT));
+    const hero = addHero(world, 0, 0);
+    addProgression(world, hero);
+    const enemy = spawnEnemy(world, 'enemy.raki', { x: 0.2, y: 0 });
+    const health = world.store('health').get(enemy);
+    if (health) health.hp = 1; // один выстрел добивает
+
+    combatSystem(world, 1 / 60, attackInput());
+
+    // enemy.raki: xpLevel=1, danger=0 → xpForEnemyKill(1,0) = 10
+    expect(world.store('progression').get(hero)?.xp).toBe(10);
+  });
+
+  it('убийство врага «Краном» тоже начисляет опыт (общая точка applyDamageToEnemy)', () => {
+    const world = build(fakeRng(NO_SPREAD_NO_CRIT));
+    const hero = addHero(world, 0, 0);
+    addProgression(world, hero);
+    const weapons = world.store('weapons').get(hero);
+    if (weapons) weapons.equipped = 'item.wrench_kran';
+    const enemy = spawnEnemy(world, 'enemy.ohrana_progress2', { x: 0.5, y: 0 });
+    const health = world.store('health').get(enemy);
+    if (health) health.hp = 1;
+
+    combatSystem(world, 1 / 60, attackInput());
+
+    expect(world.store('progression').get(hero)?.xp).toBe(10);
+  });
+
+  it('ранение, не убивающее врага, не начисляет опыт', () => {
+    const world = build(fakeRng(NO_SPREAD_NO_CRIT));
+    const hero = addHero(world, 0, 0);
+    addProgression(world, hero);
+    spawnEnemy(world, 'enemy.raki', { x: 0.2, y: 0 }); // ХП 40, один выстрел не убивает
+
+    combatSystem(world, 1 / 60, attackInput());
+
+    expect(world.store('progression').get(hero)?.xp).toBe(0);
+  });
+
+  it('без компонента progression у убийцы — не падает, просто не начисляет', () => {
+    const world = build(fakeRng(NO_SPREAD_NO_CRIT));
+    addHero(world, 0, 0);
+    const enemy = spawnEnemy(world, 'enemy.raki', { x: 0.2, y: 0 });
+    const health = world.store('health').get(enemy);
+    if (health) health.hp = 1;
+
+    expect(() => combatSystem(world, 1 / 60, attackInput())).not.toThrow();
+  });
+
+  it('накопленный опыт левелапит героя, если суммарно хватает (несколько убийств)', () => {
+    const world = build(fakeRng(NO_SPREAD_NO_CRIT));
+    const hero = addHero(world, 0, 0);
+    world.store('progression').add(hero, { xp: 290, level: 1, skillPoints: 0, smekalka: 6 });
+    const enemy = spawnEnemy(world, 'enemy.raki', { x: 0.2, y: 0 }); // xpForEnemyKill = 10 → 290+10=300=порог ур.2
+    const health = world.store('health').get(enemy);
+    if (health) health.hp = 1;
+
+    combatSystem(world, 1 / 60, attackInput());
+
+    const progression = world.store('progression').get(hero);
+    expect(progression?.xp).toBe(300);
+    expect(progression?.level).toBe(2);
+    expect(progression?.skillPoints).toBe(12); // 6 + Смекалка(6)
   });
 });

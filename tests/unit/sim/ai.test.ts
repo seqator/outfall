@@ -4,6 +4,7 @@ import { createInputSnapshot } from '../../../src/core/input';
 import { createSeededRng } from '../../../src/core/rng';
 import { createWorld, type EntityId, type World } from '../../../src/core/world';
 import type { AiPhase } from '../../../src/sim/components';
+import { ENEMY_DEFS } from '../../../src/sim/formulas/enemies';
 import { aiSystem, isEnemyWeaknessActive, spawnEnemy } from '../../../src/sim/systems/ai';
 
 function build(): World {
@@ -317,6 +318,13 @@ describe('sim/systems/ai: aiSystem — фазы', () => {
     expect(world.store('aiState').get(enemy)?.targetId).not.toBe(evenFarther);
   });
 
+  it('isEnemyWeaknessActive: window="cooldown-start" активна только в первые windowMs отката', () => {
+    expect(isEnemyWeaknessActive('cooldown-start', 'cooldown', 500, 1000)).toBe(true);
+    expect(isEnemyWeaknessActive('cooldown-start', 'cooldown', 1000, 1000)).toBe(true); // граница включительно
+    expect(isEnemyWeaknessActive('cooldown-start', 'cooldown', 1001, 1000)).toBe(false);
+    expect(isEnemyWeaknessActive('cooldown-start', 'telegraph', 0, 1000)).toBe(false);
+  });
+
   it('цель без health-компонента — резолв атаки не падает и не эмитит combat.hit', () => {
     const world = build();
     const player = world.create();
@@ -331,5 +339,192 @@ describe('sim/systems/ai: aiSystem — фазы', () => {
     world.events.drain();
 
     expect(hitHandler).not.toHaveBeenCalled();
+  });
+});
+
+describe('sim/systems/ai: OF-035 — Автомат НИИ (роль turret, стационарен)', () => {
+  it('не двигается к игроку в фазе chase — стоит на месте и просто ждёт дальности атаки', () => {
+    const world = build();
+    addPlayer(world, 5, 0); // в пределах rangeM=10 turret'а сразу
+    const enemy = spawnEnemy(world, 'enemy.avtomat_nii', { x: 0, y: 0 });
+
+    aiSystem(world, 1 / 60, INPUT); // idle → chase
+    expect(world.store('velocity').get(enemy)).toEqual({ vx: 0, vy: 0 });
+    aiSystem(world, 1 / 60, INPUT); // chase → telegraph (сразу в радиусе атаки, не двигаясь)
+
+    expect(world.store('aiState').get(enemy)?.phase).toBe('telegraph');
+    expect(world.store('velocity').get(enemy)).toEqual({ vx: 0, vy: 0 });
+  });
+
+  it('игрок в радиусе агро (12), но ещё вне дальности атаки (10) — стоит в chase, не двигаясь и не стреляя', () => {
+    const world = build();
+    addPlayer(world, 11, 0); // 10 < 11 ≤ 12
+    const enemy = spawnEnemy(world, 'enemy.avtomat_nii', { x: 0, y: 0 });
+
+    aiSystem(world, 1 / 60, INPUT); // idle → chase
+    aiSystem(world, 1 / 60, INPUT); // chase: вне rangeM=10 — ждёт на месте
+
+    expect(world.store('aiState').get(enemy)?.phase).toBe('chase');
+    expect(world.store('velocity').get(enemy)).toEqual({ vx: 0, vy: 0 });
+  });
+
+  it('игрок далеко (вне aggroRadius) — турель остаётся idle, не гонится', () => {
+    const world = build();
+    addPlayer(world, 100, 0);
+    const enemy = spawnEnemy(world, 'enemy.avtomat_nii', { x: 0, y: 0 });
+
+    aiSystem(world, 1 / 60, INPUT);
+
+    expect(world.store('aiState').get(enemy)?.phase).toBe('idle');
+    expect(world.store('velocity').get(enemy)).toEqual({ vx: 0, vy: 0 });
+  });
+
+  it('слабость (радиатор) активна только первую 1000 мс отката (окно cooldown-start)', () => {
+    const world = build();
+    addPlayer(world, 1, 0, 1000);
+    const enemy = spawnEnemy(world, 'enemy.avtomat_nii', { x: 0, y: 0 });
+    advanceUntilPhase(world, enemy, 'cooldown');
+
+    const def = ENEMY_DEFS['enemy.avtomat_nii'];
+    const state = world.store('aiState').get(enemy);
+    expect(state).toBeTruthy();
+    if (!state) return;
+
+    expect(isEnemyWeaknessActive(def.weakness.window, state.phase, state.phaseElapsedMs, def.weakness.windowMs)).toBe(
+      true,
+    );
+
+    state.phaseElapsedMs = 1500; // за пределами windowMs=1000
+    expect(isEnemyWeaknessActive(def.weakness.window, state.phase, state.phaseElapsedMs, def.weakness.windowMs)).toBe(
+      false,
+    );
+  });
+});
+
+describe('sim/systems/ai: OF-035 — Чистый (роль thrower, лужа вместо мгновенного урона)', () => {
+  it('попадание создаёт hazardZone-сущность в точке игрока, не наносит мгновенного урона игроку', () => {
+    const world = build();
+    const player = addPlayer(world, 1, 0, 100); // rangeM Чистого = 4
+    const enemy = spawnEnemy(world, 'enemy.chisty', { x: 0, y: 0 });
+
+    advanceUntilPhase(world, enemy, 'cooldown');
+
+    expect(world.store('health').get(player)?.hp).toBe(100); // без мгновенного урона
+    const hazards = [...world.query('hazardZone')];
+    expect(hazards).toHaveLength(1);
+    expect(world.store('hazardZone').get(hazards[0] as EntityId)).toEqual({
+      radiusM: 1.5,
+      damagePerSec: 4,
+      remainingMs: 3000,
+    });
+    expect(world.store('transform').get(hazards[0] as EntityId)).toMatchObject({ x: 1, y: 0 });
+  });
+
+  it('эмитит combat.hit с damage:0 при попадании (фляга «попала»)', () => {
+    const world = build();
+    addPlayer(world, 1, 0, 100);
+    const enemy = spawnEnemy(world, 'enemy.chisty', { x: 0, y: 0 });
+    const handler = vi.fn();
+    world.events.on('combat.hit', handler);
+
+    advanceUntilPhase(world, enemy, 'cooldown');
+    world.events.drain();
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler.mock.calls[0]?.[0]).toMatchObject({ damage: 0, crit: false });
+  });
+
+  it('i-frames рывка блокируют создание лужи так же, как обычный урон', () => {
+    const world = build();
+    const player = addPlayer(world, 1, 0, 100);
+    world.store('dashState').add(player, { iframesRemainingMs: 500, cooldownRemainingMs: 0 });
+    const enemy = spawnEnemy(world, 'enemy.chisty', { x: 0, y: 0 });
+
+    advanceUntilPhase(world, enemy, 'cooldown');
+
+    expect([...world.query('hazardZone')]).toHaveLength(0);
+  });
+});
+
+describe('sim/systems/ai: OF-035 — Энергосбытовец (гарантированный шок независимо от % урона)', () => {
+  it('удар 20 против МаксХП 1000 (2% — далеко ниже обычного порога 30%) всё равно накладывает шок', () => {
+    const world = build();
+    const player = addPlayer(world, 1, 0, 1000);
+    const enemy = spawnEnemy(world, 'enemy.energosbytovets', { x: 0, y: 0 });
+
+    advanceUntilPhase(world, enemy, 'cooldown');
+
+    expect(world.store('shockState').get(player)?.remainingMs).toBe(4000);
+    expect(world.store('health').get(player)?.hp).toBe(980);
+  });
+});
+
+describe('sim/systems/ai: OF-035 — Крыса-«пластиковая» (рашер-свара)', () => {
+  it('ХП 8, урон 6, слабость ×1,5 всегда — умирает почти от любого попадания', () => {
+    const world = build();
+    const player = addPlayer(world, 1, 0, 100);
+    const enemy = spawnEnemy(world, 'enemy.krysa_plastikovaya', { x: 0, y: 0 });
+
+    advanceUntilPhase(world, enemy, 'cooldown');
+
+    expect(world.store('health').get(player)?.hp).toBe(94);
+    expect(world.store('health').get(enemy)?.hp).toBe(8);
+  });
+});
+
+describe('sim/systems/ai: OF-035 — Босс-задвижка (роль boss, AoE по случайной точке арены)', () => {
+  it('не двигается к игроку (стационарен), выставляет bossAim при входе в telegraph', () => {
+    const world = build();
+    addPlayer(world, 2, 0);
+    const enemy = spawnEnemy(world, 'enemy.boss_zadvizhka', { x: 0, y: 0 });
+
+    advanceUntilPhase(world, enemy, 'telegraph');
+
+    expect(world.store('velocity').get(enemy)).toEqual({ vx: 0, vy: 0 });
+    const aim = world.store('bossAim').get(enemy);
+    expect(aim).toBeTruthy();
+    if (aim) {
+      expect(Math.hypot(aim.targetX, aim.targetY)).toBeLessThanOrEqual(
+        ENEMY_DEFS['enemy.boss_zadvizhka'].attack.rangeM + 1e-9,
+      );
+    }
+  });
+
+  it('резолвит AoE-урон через bossAim, а не через прямую дистанцию игрок↔босс', () => {
+    const world = build();
+    // Игрок далеко от самого босса, но окажется рядом с точкой прицеливания,
+    // которую мы подставим вручную после входа в telegraph.
+    const player = addPlayer(world, 8, 0, 100);
+    const enemy = spawnEnemy(world, 'enemy.boss_zadvizhka', { x: 0, y: 0 });
+    advanceUntilPhase(world, enemy, 'telegraph');
+
+    // Подменяем случайно выбранную точку прицеливания на позицию игрока —
+    // детерминированно проверяем, что резолв атаки идёт именно по ней.
+    world.store('bossAim').add(enemy, { targetX: 8, targetY: 0 });
+
+    advanceUntilPhase(world, enemy, 'cooldown');
+
+    // §4.1: База=25, Навык=50, Крит=1, Слабость=1, Броня=0 → 25
+    expect(world.store('health').get(player)?.hp).toBe(75);
+  });
+
+  it('слабость (шток) активна только первые 2000 мс отката', () => {
+    const world = build();
+    addPlayer(world, 0, 0);
+    const enemy = spawnEnemy(world, 'enemy.boss_zadvizhka', { x: 0, y: 0 });
+    advanceUntilPhase(world, enemy, 'cooldown');
+
+    const def = ENEMY_DEFS['enemy.boss_zadvizhka'];
+    const state = world.store('aiState').get(enemy);
+    expect(state).toBeTruthy();
+    if (!state) return;
+
+    expect(isEnemyWeaknessActive(def.weakness.window, state.phase, state.phaseElapsedMs, def.weakness.windowMs)).toBe(
+      true,
+    );
+    state.phaseElapsedMs = 2500;
+    expect(isEnemyWeaknessActive(def.weakness.window, state.phase, state.phaseElapsedMs, def.weakness.windowMs)).toBe(
+      false,
+    );
   });
 });

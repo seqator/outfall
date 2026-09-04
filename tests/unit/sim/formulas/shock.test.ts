@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   advanceShock,
+  applyForcedShockHit,
   applyShockHit,
   isShocked,
   SHOCK_DURATION_MS,
@@ -61,5 +62,26 @@ describe('sim/formulas/shock: advanceShock/isShocked', () => {
 
   it('эффект — фиксированные −15% скорости', () => {
     expect(SHOCK_SPEED_MULTIPLIER).toBe(0.85);
+  });
+});
+
+describe('sim/formulas/shock: OF-035 — перки «Дублёная шкура»/«Хладнокровие» (rpg-system.md §3)', () => {
+  it('shouldTriggerShock с порогом 40% («Дублёная шкура»): 39% не триггерит, 40% триггерит', () => {
+    expect(shouldTriggerShock(39, 100, 0.4)).toBe(false);
+    expect(shouldTriggerShock(40, 100, 0.4)).toBe(true);
+  });
+
+  it('applyShockHit с переопределённой длительностью («Хладнокровие»: 2000 мс вместо 4000)', () => {
+    const state = applyShockHit(undefined, 30, 100, 0.3, 2000);
+    expect(state).toEqual({ remainingMs: 2000 });
+  });
+
+  it('applyShockHit без перков — поведение не изменилось (значения по умолчанию)', () => {
+    expect(applyShockHit(undefined, 30, 100)).toEqual({ remainingMs: SHOCK_DURATION_MS });
+  });
+
+  it('applyForcedShockHit (Энергосбытовец, §2.4) — всегда триггерит независимо от урона', () => {
+    expect(applyForcedShockHit()).toEqual({ remainingMs: SHOCK_DURATION_MS });
+    expect(applyForcedShockHit(2000)).toEqual({ remainingMs: 2000 });
   });
 });

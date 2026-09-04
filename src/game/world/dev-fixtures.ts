@@ -61,11 +61,30 @@ function buildLayers(): GameMap['layers'] {
  * тайлов, враги гарантированно не тронутся с места и не попадут в кадр,
  * пока тот тест проверяет одну лишь коллизию о стену, без боя.
  */
+/**
+ * OF-035: пять врагов, добавленных этой задачей, расставлены здесь же для
+ * ручного плейтеста через `?devroom=1` (в т.ч. критерий готовности «босс
+ * убивается за ≤ 3 мин в плейтесте», OF-035 бэклога — headless-самопроверка
+ * есть в `tests/integration/boss-encounter.test.ts`, но реального
+ * прохождения человеком она не заменяет). Координаты выбраны намеренно
+ * далеко (≥ 25 тайлов) и от северного коридора x≈32 (`hero-movement.
+ * spec.ts` ходит по нему строго на север из спавна (32,32) до стены y=0), и
+ * от трёх спавнов среза выше — радиус агро/гистерезис (максимум 12×1,5=18
+ * тайлов у турели/раков) их не достаёт, так что оба существующих e2e-теста
+ * (`hero-movement.spec.ts`, `stress.spec.ts`) не задеты новыми спавнами.
+ */
 function buildEnemySpawns(): GameMap['enemySpawns'] {
   return [
     { id: 'raki_1', enemyId: 'enemy.raki', position: { x: 16, y: 54 }, count: 1 },
     { id: 'podlineiny_1', enemyId: 'enemy.podlineiny', position: { x: 48, y: 54 }, count: 1 },
     { id: 'ohrana_1', enemyId: 'enemy.ohrana_progress2', position: { x: 32, y: 58 }, count: 1 },
+    { id: 'energosbytovets_1', enemyId: 'enemy.energosbytovets', position: { x: 8, y: 44 }, count: 1 },
+    { id: 'chisty_1', enemyId: 'enemy.chisty', position: { x: 56, y: 44 }, count: 1 },
+    { id: 'krysa_1', enemyId: 'enemy.krysa_plastikovaya', position: { x: 8, y: 50 }, count: 1 },
+    { id: 'krysa_2', enemyId: 'enemy.krysa_plastikovaya', position: { x: 10, y: 50 }, count: 1 },
+    { id: 'krysa_3', enemyId: 'enemy.krysa_plastikovaya', position: { x: 12, y: 50 }, count: 1 },
+    { id: 'avtomat_nii_1', enemyId: 'enemy.avtomat_nii', position: { x: 56, y: 50 }, count: 1 },
+    { id: 'boss_zadvizhka_1', enemyId: 'enemy.boss_zadvizhka', position: { x: 46, y: 60 }, count: 1 },
   ];
 }
 

@@ -84,6 +84,7 @@ export interface MapGridComponent {
 
 import type { EntityId } from '../../core/world';
 import type { EnemyDefId } from '../formulas/enemies';
+import type { PerkId } from '../formulas/perks';
 import type { WeaponId } from '../formulas/weapons';
 
 /** Здоровье/броня — общий компонент для героя и врагов (§4.1 combat.md). */
@@ -177,6 +178,46 @@ export interface EnemyComponent {
   defId: EnemyDefId;
 }
 
+/**
+ * OF-035: прогрессия/перки героя, персистентная зона урона («лужа» Чистого)
+ * и точка прицеливания AoE-залпа Босса-задвижки. Живут в отдельном блоке —
+ * это уже вторая волна боевых компонентов поверх OF-016 (враги
+ * среза/оружие/шок/рывок выше), не переиспользуют существующие интерфейсы,
+ * чтобы не тянуть в них поля, нужные только новым системам
+ * (`systems/effects.ts`, `systems/boss-ai.ts`, `formulas/progression.ts`,
+ * `formulas/perks.ts`).
+ */
+
+/** Опыт/уровень/неизрасходованные очки навыков героя (`rpg-system.md` §4). `smekalka` — снимок характеристики Смекалка на момент начисления опыта (формула очков навыков за уровень, §1.3/§2); хранится здесь, а не в `AttributesComponent`, чтобы не тянуть в бой (и в сейв-схему OF-019) характеристику, боевым формулам §4 combat.md не нужную. */
+export interface ProgressionComponent {
+  xp: number;
+  level: number;
+  skillPoints: number;
+  smekalka: number;
+}
+
+/** Разблокированные перки героя (`rpg-system.md` §3) плюс рантайм-состояние одноразовых эффектов, которые не укладываются в чистую формулу (см. докстринг `formulas/perks.ts`). */
+export interface PerksComponent {
+  unlockedPerkIds: PerkId[];
+  /** «Последний патрон» (перк 3, Стрелок ур.10) — доступна ли ещё раз-в-бой страховка от смертельного удара. Сбрасывается при возрождении (`demo-scene.ts`). */
+  lastStandAvailable: boolean;
+  /** «Последний патрон»: гарантированный крит следующего выстрела героя после срабатывания страховки. */
+  guaranteedCritPending: boolean;
+}
+
+/** Персистентная зона урона со временем — «лужа» Чистого (§2.5 combat.md). Обрабатывается стадией `effects` (`systems/effects.ts`), создаётся `aiSystem` при попадании атаки с `hazardOnHit`. */
+export interface HazardZoneComponent {
+  radiusM: number;
+  damagePerSec: number;
+  remainingMs: number;
+}
+
+/** Точка прицеливания текущего цикла AoE-залпа Босса-задвижки (§2.8 combat.md) — выбирается в момент входа в `telegraph`, резолвится в `attack` (`systems/boss-ai.ts`). Есть только у сущности с ролью `'boss'`. */
+export interface BossAimComponent {
+  targetX: number;
+  targetY: number;
+}
+
 declare module '../../core/world' {
   interface Components {
     transform: TransformComponent;
@@ -197,5 +238,9 @@ declare module '../../core/world' {
     immobilized: ImmobilizedComponent;
     aiState: AiStateComponent;
     enemy: EnemyComponent;
+    progression: ProgressionComponent;
+    perks: PerksComponent;
+    hazardZone: HazardZoneComponent;
+    bossAim: BossAimComponent;
   }
 }

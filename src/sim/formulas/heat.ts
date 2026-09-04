@@ -37,22 +37,49 @@ export function canFireHeat(state: HeatState): boolean {
 }
 
 /**
+ * Модификаторы перков Лучевика (`rpg-system.md` §3, OF-035) — «Холодный
+ * ствол»/«Быстрый сброс»/«Перегрузка». Как и само оружие «Дуга», не
+ * подключены ни к какой боевой системе в этом срезе (оружия «Дуга» нет,
+ * §3 combat.md — «позже»), формулы протестированы отдельно тем же приёмом,
+ * что и остальной этот файл (см. докстринг в шапке).
+ */
+export interface HeatPerkModifiers {
+  /** «Холодный ствол» — множитель накопления жара за выстрел (0,8 — на 20% медленнее). */
+  readonly gainMult?: number;
+  /** «Быстрый сброс» — множитель скорости остывания в простое. */
+  readonly coolMult?: number;
+  /** «Перегрузка» — новая длительность блока после аварийного выстрела вместо `HEAT_BLOCK_MS`. */
+  readonly blockMsOverride?: number;
+}
+
+/**
  * Один шаг симуляции жара на `dtSec` секунд. `firing` — стреляли ли в этом
  * промежутке. Пока идёт блок — жар остаётся на 0 (сброшен в момент
  * срабатывания), стрельба недоступна, отсчитывается только время блока.
+ * `perks` — необязательные модификаторы перков (по умолчанию не меняют
+ * поведение относительно базовых констант).
  */
-export function advanceHeat(state: HeatState, firing: boolean, dtSec: number): HeatState {
+export function advanceHeat(
+  state: HeatState,
+  firing: boolean,
+  dtSec: number,
+  perks: HeatPerkModifiers = {},
+): HeatState {
+  const gainMult = perks.gainMult ?? 1;
+  const coolMult = perks.coolMult ?? 1;
+  const blockMs = perks.blockMsOverride ?? HEAT_BLOCK_MS;
+
   if (state.blockRemainingMs > 0) {
     return { heat: 0, blockRemainingMs: Math.max(0, state.blockRemainingMs - dtSec * 1000) };
   }
 
   if (firing) {
-    const heat = state.heat + HEAT_GAIN_PER_SEC * dtSec;
+    const heat = state.heat + HEAT_GAIN_PER_SEC * gainMult * dtSec;
     if (heat >= HEAT_MAX) {
-      return { heat: 0, blockRemainingMs: HEAT_BLOCK_MS };
+      return { heat: 0, blockRemainingMs: blockMs };
     }
     return { heat, blockRemainingMs: 0 };
   }
 
-  return { heat: Math.max(0, state.heat - HEAT_COOL_PER_SEC * dtSec), blockRemainingMs: 0 };
+  return { heat: Math.max(0, state.heat - HEAT_COOL_PER_SEC * coolMult * dtSec), blockRemainingMs: 0 };
 }

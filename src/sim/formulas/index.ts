@@ -12,3 +12,5 @@ export * from './heat';
 export * from './shock';
 export * from './weapons';
 export * from './enemies';
+export * from './perks';
+export * from './progression';

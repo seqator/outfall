@@ -143,12 +143,25 @@ const PLAYER_DEFAULT_COURAGE = 5;
 const PLAYER_DEFAULT_REFLEX = 5;
 /** То же допущение «КОСТЯК-база 5» (см. выше), нужное отдельно для лимита переносимого веса (`items-economy.md` §1.1, `weightLimitKg`). */
 const PLAYER_KARKAS = 5;
+/** То же допущение «КОСТЯК-база 5», нужное для формулы очков навыков за уровень (`rpg-system.md` §1.3/§2, `formulas/progression.ts: skillPointsPerLevel`). */
+const PLAYER_DEFAULT_SMEKALKA = 5;
 
-/** Три врага среза (`docs/design/combat.md` §2.1–2.3) — остальные пять `spawnMarker` refId вне скоупа OF-016 (OF-035) и молча игнорируются. */
-const SLICE_ENEMY_DEF_IDS: ReadonlySet<EnemyDefId> = new Set<EnemyDefId>([
+/**
+ * Все восемь врагов GDD (`docs/design/combat.md` §2) — OF-035 реализует
+ * оставшиеся пять (энергосбытовец/чистый/крыса/автомат НИИ/босс). Ни одна
+ * настоящая карта пока не размечает их `spawnMarker`-метками (Акт 1/2 —
+ * OF-032/033/036/037, `todo`), но фильтр держим по полному списку заранее —
+ * когда level-designer добавит метки, спавн заработает без правки кода.
+ */
+const SPAWNABLE_ENEMY_DEF_IDS: ReadonlySet<EnemyDefId> = new Set<EnemyDefId>([
   'enemy.raki',
   'enemy.podlineiny',
   'enemy.ohrana_progress2',
+  'enemy.energosbytovets',
+  'enemy.chisty',
+  'enemy.krysa_plastikovaya',
+  'enemy.avtomat_nii',
+  'enemy.boss_zadvizhka',
 ]);
 
 function attachCombatComponents(world: World, hero: EntityId): void {
@@ -164,6 +177,13 @@ function attachCombatComponents(world: World, hero: EntityId): void {
     fists: PLAYER_DEFAULT_SKILL,
   });
   world.store('dashState').add(hero, { iframesRemainingMs: 0, cooldownRemainingMs: 0 });
+  // OF-035: прогрессия/перки — герой стартует без единого разблокированного
+  // перка (нет экрана выбора перков в этой волне, см. отчёт задачи), но
+  // компоненты нужны заранее, чтобы `combatSystem`/`ai.ts`/`player-damage.ts`
+  // могли их читать без дополнительных проверок «а есть ли компонент вообще»
+  // на каждый новый сейв/тест.
+  world.store('progression').add(hero, { xp: 0, level: 1, skillPoints: 0, smekalka: PLAYER_DEFAULT_SMEKALKA });
+  world.store('perks').add(hero, { unlockedPerkIds: [], lastStandAvailable: true, guaranteedCritPending: false });
 }
 
 /** Превращает `spawnMarker`-метки карты (kind: 'enemy') в боевые сущности врагов и убирает отработанные метки. */
@@ -172,7 +192,7 @@ function spawnEnemiesFromMarkers(world: World, enemySpawnEntities: readonly Enti
     const spawnMarker = world.store('spawnMarker').get(marker);
     const transform = world.store('transform').get(marker);
     if (!spawnMarker || !transform) continue;
-    if (!SLICE_ENEMY_DEF_IDS.has(spawnMarker.refId as EnemyDefId)) continue;
+    if (!SPAWNABLE_ENEMY_DEF_IDS.has(spawnMarker.refId as EnemyDefId)) continue;
     spawnEnemy(world, spawnMarker.refId as EnemyDefId, { x: transform.x, y: transform.y });
     world.destroy(marker);
   }
@@ -191,7 +211,7 @@ function collectFreeTiles(map: GameMap): Array<{ x: number; y: number }> {
 /** `?stress=1`: спавнит `count` врагов на случайных свободных клетках — для FPS-нагрузочного теста (§8 задачи, `tests/e2e/stress.spec.ts`). */
 function spawnStressEnemies(world: World, map: GameMap, count: number): void {
   const freeTiles = collectFreeTiles(map);
-  const defIds: readonly EnemyDefId[] = [...SLICE_ENEMY_DEF_IDS];
+  const defIds: readonly EnemyDefId[] = [...SPAWNABLE_ENEMY_DEF_IDS];
   for (let i = 0; i < count && freeTiles.length > 0; i++) {
     const index = world.rng.int(0, freeTiles.length - 1);
     const tile = freeTiles[index];
@@ -824,6 +844,13 @@ export async function createDemoScene(
           transform.prevX = spawn.x;
           transform.prevY = spawn.y;
         }
+        // «Последний патрон» (`rpg-system.md` §3, перк 3) — «раз в бой».
+        // Дискретной системы «боевых столкновений» в этой волне нет
+        // (см. ДОПУЩЕНИЕ в `formulas/perks.ts`), ближайшая согласованная
+        // трактовка — сбрасывать страховку на возрождении, как и остальное
+        // боевое состояние героя.
+        const perks = world.store('perks').get(hero);
+        if (perks) perks.lastStandAvailable = true;
         heroDeadSinceMs = null;
       } else if (health.hp > 0) {
         heroDeadSinceMs = null;

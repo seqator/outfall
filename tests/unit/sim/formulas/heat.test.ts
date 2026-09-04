@@ -53,3 +53,27 @@ describe('sim/formulas/heat: advanceHeat (§4.5)', () => {
     expect(HEAT_MAX).toBe(100);
   });
 });
+
+describe('sim/formulas/heat: OF-035 — перки Лучевика (rpg-system.md §3)', () => {
+  it('«Холодный ствол» (heatGainMult 0,8) — за 1 с стрельбы жар 40 вместо 50', () => {
+    const state = advanceHeat(INITIAL_HEAT_STATE, true, 1, { gainMult: 0.8 });
+    expect(state.heat).toBeCloseTo(40, 6);
+  });
+
+  it('«Быстрый сброс» (heatCoolMult 1,5) — за 1 с простоя при жаре 60 остывание на 30 вместо 20', () => {
+    const state = advanceHeat({ heat: 60, blockRemainingMs: 0 }, false, 1, { coolMult: 1.5 });
+    expect(state.heat).toBeCloseTo(30, 6);
+  });
+
+  it('«Перегрузка» (overheatBlockMsOverride 3000) — блок при переполнении длится 3000 мс вместо HEAT_BLOCK_MS', () => {
+    const state = advanceHeat(INITIAL_HEAT_STATE, true, 2, { blockMsOverride: 3000 });
+    expect(state.heat).toBe(0);
+    expect(state.blockRemainingMs).toBe(3000);
+  });
+
+  it('без перков (perks не передан) — поведение идентично базовому', () => {
+    const withDefaults = advanceHeat(INITIAL_HEAT_STATE, true, 1, {});
+    const withoutArg = advanceHeat(INITIAL_HEAT_STATE, true, 1);
+    expect(withDefaults).toEqual(withoutArg);
+  });
+});

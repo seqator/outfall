@@ -9,6 +9,14 @@
  * формул (OF-003, эта задача — OF-016 по нему же), поэтому реализована
  * фиксированная длительность без модификатора Твёрдости; вариант из
  * `rpg-system.md` — устаревший черновик, не встроен.
+ *
+ * OF-035: перки «Дублёная шкура» (порог 40% вместо 30%) и «Хладнокровие»
+ * (длительность 2 с вместо 4 с, `rpg-system.md` §3) — это не повтор того же
+ * противоречия, а осознанное исключение из «фиксированных 4 с», которое сам
+ * GDD и предусматривает через перки. `shouldTriggerShock`/`applyShockHit`
+ * принимают порог/длительность необязательными параметрами (по умолчанию —
+ * прежние константы, старые вызовы не меняют поведение); применяет их
+ * `sim/systems/player-damage.ts`, читая эффект перков игрока.
  */
 
 export const SHOCK_THRESHOLD_RATIO = 0.3;
@@ -16,9 +24,13 @@ export const SHOCK_DURATION_MS = 4000;
 /** −15% скорости передвижения — единственный эффект шока (без штрафа к разбросу/скорострельности/урону, см. §4.6). */
 export const SHOCK_SPEED_MULTIPLIER = 0.85;
 
-/** `Триггер: ОдинУдар ≥ 30% × МаксХП игрока`. */
-export function shouldTriggerShock(hitDamage: number, maxHp: number): boolean {
-  return hitDamage >= maxHp * SHOCK_THRESHOLD_RATIO;
+/** `Триггер: ОдинУдар ≥ ПорогДоли × МаксХП игрока` (по умолчанию 30%, §4.6; перк «Дублёная шкура» поднимает порог до 40%). */
+export function shouldTriggerShock(
+  hitDamage: number,
+  maxHp: number,
+  thresholdRatio: number = SHOCK_THRESHOLD_RATIO,
+): boolean {
+  return hitDamage >= maxHp * thresholdRatio;
 }
 
 export interface ShockState {
@@ -27,20 +39,33 @@ export interface ShockState {
 
 /**
  * Применяет попадание к текущему состоянию шока: если удар триггерит шок —
- * таймер сбрасывается на полные `SHOCK_DURATION_MS`, даже если шок уже был
- * активен (не стекается — эффект остаётся тем же −15%, не удваивается,
- * длительность не продлевается сверх 4 с). Если удар не триггерит шок —
- * состояние не меняется (возвращает `current` как есть).
+ * таймер сбрасывается на полные `durationMs` (по умолчанию `SHOCK_DURATION_MS`),
+ * даже если шок уже был активен (не стекается — эффект остаётся тем же
+ * −15%, не удваивается, длительность не продлевается сверх заданной). Если
+ * удар не триггерит шок — состояние не меняется (возвращает `current` как
+ * есть).
  */
 export function applyShockHit(
   current: ShockState | undefined,
   hitDamage: number,
   maxHp: number,
+  thresholdRatio: number = SHOCK_THRESHOLD_RATIO,
+  durationMs: number = SHOCK_DURATION_MS,
 ): ShockState | undefined {
-  if (shouldTriggerShock(hitDamage, maxHp)) {
-    return { remainingMs: SHOCK_DURATION_MS };
+  if (shouldTriggerShock(hitDamage, maxHp, thresholdRatio)) {
+    return { remainingMs: durationMs };
   }
   return current;
+}
+
+/**
+ * Гарантированный шок независимо от % урона (Энергосбытовец, §2.4
+ * combat.md: «гарантированно накладывает статус „Шок“… независимо от %
+ * потерянного ХП») — не стекается так же, как обычный триггер (полный
+ * сброс таймера на `durationMs`).
+ */
+export function applyForcedShockHit(durationMs: number = SHOCK_DURATION_MS): ShockState {
+  return { remainingMs: durationMs };
 }
 
 export function advanceShock(state: ShockState, dtSec: number): ShockState {

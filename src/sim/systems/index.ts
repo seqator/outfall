@@ -7,18 +7,23 @@
  * OF-016 добавляет `ai` (телеграф/атака трёх врагов среза, `ai.ts`) между
  * `input` и `movement` и `combat` (стрельба/рывок/снаряды/урон/смерть,
  * `combat.ts`) после `collision` — ровно та точка, которую фиксирует §4
- * `docs/tech/architecture.md`. `effects`/`quest`/`cleanup` — задачи после
- * OF-016.
+ * `docs/tech/architecture.md`. OF-035 добавляет стадию `effects`
+ * (`effects.ts`, тик персистентных зон урона — «лужа» Чистого) сразу после
+ * `combat`, там же, где её резервирует докстринг архитектуры;
+ * `quest`/`cleanup` — задачи после OF-035.
  */
 
 import type { InputSnapshot } from '../../core/input';
 import type { World } from '../../core/world';
 import { aiSystem, isEnemyWeaknessActive, spawnEnemy } from './ai';
+import { pickArenaPoint, resolveBossAttack } from './boss-ai';
 import { collisionSystem } from './collision';
 import { combatSystem, createWeaponRuntimeState, createWeaponsComponent } from './combat';
+import { effectsSystem, spawnHazardZone } from './effects';
 import { inputControlSystem } from './input-control';
 import { interactionSystem } from './interaction';
 import { movementSystem } from './movement';
+import { applyDamageToPlayer } from './player-damage';
 
 export type System = (world: World, dt: number, input: InputSnapshot) => void;
 
@@ -33,6 +38,11 @@ export {
   createWeaponsComponent,
   createWeaponRuntimeState,
   interactionSystem,
+  effectsSystem,
+  spawnHazardZone,
+  pickArenaPoint,
+  resolveBossAttack,
+  applyDamageToPlayer,
 };
 export type { InteractRequestedEvent } from './interaction';
 
@@ -43,5 +53,6 @@ export const SYSTEM_ORDER: readonly System[] = [
   movementSystem,
   collisionSystem,
   combatSystem,
+  effectsSystem,
   interactionSystem,
 ];

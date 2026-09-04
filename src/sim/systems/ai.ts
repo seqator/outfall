@@ -1,8 +1,8 @@
 /**
  * Стадия `ai` (SYSTEM_ORDER: `input → ai → movement → collision → combat →
- * effects`, `docs/tech/architecture.md` §4). Конечный автомат ИИ для трёх
- * врагов среза (Раки/Подлинейный/Охрана «Прогресс-2», `docs/design/
- * combat.md` §2.1–2.3): `idle → chase → telegraph → attack → cooldown`.
+ * effects`, `docs/tech/architecture.md` §4). Конечный автомат ИИ для всех
+ * восьми врагов (`docs/design/combat.md` §2): `idle → chase → telegraph →
+ * attack → cooldown`.
  *
  * Атака врага резолвится мгновенной проверкой дальности в момент завершения
  * телеграфа (не как перемещающийся снаряд/дуга) — рывок Раков и бросок сети
@@ -14,6 +14,23 @@
  * `spawnEnemy` — единственная точка создания боевой сущности врага из
  * `ENEMY_DEFS`; вызывается `game/demo-scene.ts` для меток спавна карты
  * (`spawnMarker`, kind: 'enemy') и для стресс-теста (много врагов сразу).
+ *
+ * OF-035 расширяет этот же автомат тремя вещами, не ломая его для трёх
+ * врагов среза:
+ * 1. Роли `'turret'` (Автомат НИИ) и `'boss'` (Босс-задвижка) не преследуют
+ *    игрока — фаза `chase` у них не двигает сущность (см. `stationary`
+ *    ниже), только ждёт, когда дистанция позволит перейти в `telegraph`.
+ * 2. Роль `'boss'` резолвит саму атаку не здесь, а в `boss-ai.ts`
+ *    (`resolveBossAttack`) — точка прицеливания AoE выбирается один раз при
+ *    входе в `telegraph` (`bossAim`-компонент) и не совпадает с позицией
+ *    игрока (§2.8 combat.md).
+ * 3. Атака с `hazardOnHit` (Чистый, §2.5) не наносит мгновенного урона —
+ *    создаёт персистентную зону («лужу», `effects.ts: spawnHazardZone`).
+ *
+ * Урон по игроку (обычный `resolveEnemyAttack` здесь и `resolveBossAttack`
+ * в `boss-ai.ts`) применяется через общую точку `player-damage.ts`
+ * (`applyDamageToPlayer`) — шок/«Последний патрон»/«Дублёная шкура» не
+ * дублируются между этим файлом и `boss-ai.ts`.
  */
 
 import type { InputSnapshot } from '../../core/input';
@@ -21,13 +38,20 @@ import type { EntityId, World } from '../../core/world';
 import type { AiPhase, TransformComponent } from '../components';
 import { computeDamage } from '../formulas/damage';
 import { ENEMY_DEFS, type EnemyDef, type EnemyDefId, type WeaknessWindow } from '../formulas/enemies';
-import { applyShockHit } from '../formulas/shock';
+import { pickArenaPoint, resolveBossAttack } from './boss-ai';
+import { spawnHazardZone } from './effects';
+import { applyDamageToPlayer } from './player-damage';
 
 /** Небольшой запас поверх заявленной дальности атаки — терпимость к «дребезгу» дистанции между тиками (герой/враг могут сместиться за 16.7 мс). */
 const ATTACK_RANGE_TOLERANCE_M = 0.15;
 /** Если игрок ушёл дальше `aggroRadius × ушёл-множитель`, погоня прекращается — небольшой гистерезис, чтобы враг не «дёргался» на границе радиуса агро. */
 const CHASE_GIVEUP_MULTIPLIER = 1.5;
 const DEFAULT_ENEMY_RADIUS = 0.35;
+
+/** Роли, которые не двигаются к игроку (стационарны) — Автомат НИИ и Босс-задвижка (§2.7/§2.8 combat.md). */
+function isStationaryRole(role: EnemyDef['role']): boolean {
+  return role === 'turret' || role === 'boss';
+}
 
 export function spawnEnemy(world: World, defId: EnemyDefId, position: { x: number; y: number }): EntityId {
   const def = ENEMY_DEFS[defId];
@@ -43,9 +67,22 @@ export function spawnEnemy(world: World, defId: EnemyDefId, position: { x: numbe
   return entity;
 }
 
-/** Активна ли слабость врага прямо сейчас — по текущей фазе ИИ и типу окна из `EnemyDef.weakness.window`. */
-export function isEnemyWeaknessActive(window: WeaknessWindow, phase: AiPhase): boolean {
+/**
+ * Активна ли слабость врага прямо сейчас — по текущей фазе ИИ и типу окна
+ * из `EnemyDef.weakness.window`. `phaseElapsedMs`/`windowMs` нужны только
+ * для `window: 'cooldown-start'` (Автомат НИИ/Босс — «открыто N мс после
+ * атаки», окно короче остатка отката); у остальных трёх окон эти параметры
+ * не читаются — старые вызовы с двумя аргументами продолжают работать как
+ * раньше.
+ */
+export function isEnemyWeaknessActive(
+  window: WeaknessWindow,
+  phase: AiPhase,
+  phaseElapsedMs = 0,
+  windowMs = 0,
+): boolean {
   if (window === 'always') return true;
+  if (window === 'cooldown-start') return phase === 'cooldown' && phaseElapsedMs <= windowMs;
   return phase === window;
 }
 
@@ -70,10 +107,11 @@ function findNearestPlayer(world: World, x: number, y: number): NearestPlayer | 
 
 /**
  * Резолвит атаку врага в момент завершения телеграфа: если цель всё ещё в
- * зоне поражения и не в i-frames рывка — наносит урон по формуле §4.1,
- * применяет шок (§4.6) и обездвиживание (сеть Подлинейного), эмитит
- * `combat.hit`/`combat.death` для VFX. Промах (игрок вышел из радиуса или
- * поймал i-frames) не наносит урон вообще — телеграф был «прочитан».
+ * зоне поражения и не в i-frames рывка — либо создаёт лужу (`hazardOnHit`,
+ * Чистый, §2.5 — без мгновенного урона), либо наносит урон по формуле §4.1
+ * через `applyDamageToPlayer` (шок/перки — там же) и обездвиживает (сеть
+ * Подлинейного). Промах (игрок вышел из радиуса или поймал i-frames) не
+ * делает ничего — телеграф был «прочитан».
  */
 function resolveEnemyAttack(
   world: World,
@@ -93,44 +131,29 @@ function resolveEnemyAttack(
   const dash = world.store('dashState').get(targetId);
   if (dash && dash.iframesRemainingMs > 0) return;
 
+  if (def.attack.hazardOnHit) {
+    spawnHazardZone(world, targetTransform.x, targetTransform.y, def.attack.hazardOnHit);
+    world.events.emit('combat.hit', {
+      targetId,
+      wx: targetTransform.x,
+      wy: targetTransform.y,
+      damage: 0,
+      crit: false,
+    });
+    return;
+  }
+
   // Входящий урон по игроку — та же формула §4.1, Крит=1 (у врагов среза нет
   // характеристики Кураж — крит для их атак не задан GDD), Слабость=1
   // (слабости — это то, что игрок находит у врага, не наоборот), Броня=0
   // (система брони игрока — инвентарь OF-017, вне скоупа OF-016).
   const damage = computeDamage({ base: def.attack.damage, skill: def.skill, crit: 1, weakness: 1, armor: 0 });
-  targetHealth.hp = Math.max(0, targetHealth.hp - damage);
-
-  const shockStore = world.store('shockState');
-  const nextShock = applyShockHit(shockStore.get(targetId), damage, targetHealth.maxHp);
-  if (nextShock) {
-    if (shockStore.has(targetId)) {
-      const current = shockStore.get(targetId);
-      /* v8 ignore next */
-      if (current) current.remainingMs = nextShock.remainingMs;
-    } else {
-      shockStore.add(targetId, { remainingMs: nextShock.remainingMs });
-    }
-  }
+  applyDamageToPlayer(world, targetId, damage, targetTransform.x, targetTransform.y, {
+    forcedShock: def.attack.forcedShock === true,
+  });
 
   if (def.attack.immobilizeMs !== undefined) {
     world.store('immobilized').add(targetId, { remainingMs: def.attack.immobilizeMs });
-  }
-
-  world.events.emit('combat.hit', {
-    targetId,
-    wx: targetTransform.x,
-    wy: targetTransform.y,
-    damage,
-    crit: false,
-  });
-
-  if (targetHealth.hp <= 0) {
-    world.events.emit('combat.death', {
-      entityId: targetId,
-      wx: targetTransform.x,
-      wy: targetTransform.y,
-      isEnemy: false,
-    });
   }
 }
 
@@ -155,6 +178,7 @@ export function aiSystem(world: World, dt: number, _input: InputSnapshot): void 
     }
 
     const def = ENEMY_DEFS[enemy.defId];
+    const stationary = isStationaryRole(def.role);
 
     if (state.stunnedMs > 0) {
       state.stunnedMs = Math.max(0, state.stunnedMs - dtMs);
@@ -192,6 +216,15 @@ export function aiSystem(world: World, dt: number, _input: InputSnapshot): void 
           velocity.vy = 0;
           state.phase = 'telegraph';
           state.phaseElapsedMs = 0;
+          if (def.role === 'boss') {
+            const aim = pickArenaPoint(world.rng, transform.x, transform.y, def.attack.rangeM);
+            world.store('bossAim').add(entity, { targetX: aim.x, targetY: aim.y });
+          }
+        } else if (stationary) {
+          // Турель/босс не преследуют — просто ждут, пока игрок войдёт в
+          // радиус атаки (§2.7/§2.8 combat.md).
+          velocity.vx = 0;
+          velocity.vy = 0;
         } else {
           const dx = player.x - transform.x;
           const dy = player.y - transform.y;
@@ -221,7 +254,17 @@ export function aiSystem(world: World, dt: number, _input: InputSnapshot): void 
       case 'attack': {
         velocity.vx = 0;
         velocity.vy = 0;
-        resolveEnemyAttack(world, def, state.targetId, transform);
+        if (def.role === 'boss') {
+          const aim = world.store('bossAim').get(entity);
+          // `bossAim` всегда выставляется в момент входа в `telegraph` для
+          // роли `'boss'` (см. ветку `chase` выше) — фаза `attack` для босса
+          // недостижима без предварительного `telegraph`, `if (aim)` — защита
+          // типа, не достижимая через публичный API.
+          /* v8 ignore next */
+          if (aim) resolveBossAttack(world, def, state.targetId, { x: aim.targetX, y: aim.targetY });
+        } else {
+          resolveEnemyAttack(world, def, state.targetId, transform);
+        }
         state.phase = 'cooldown';
         state.phaseElapsedMs = 0;
         break;
