@@ -331,6 +331,28 @@ const NPC_DIALOG_FILES: Readonly<Record<string, string>> = {
   'npc.palych': 'act1-ya-kran',
 };
 
+/**
+ * NPC → флаг, которым помечен уже сделанный необратимый выбор его диалога
+ * (OF-046/051). Найдено пятой рецензией duxa-simulator (`duxa-review-vs-5.md`,
+ * P0): без этой границы `E` рядом с уже пройденным NPC каждый раз заново
+ * открывал тот же диалог и повторно применял `incrementFlag`/`giveItem` —
+ * трижды «Отвести на отработку» утраивало `rep.progress2`, а «Я кран»
+ * предлагал убить/пощадить Палыча заново после того, как игрок уже решил.
+ * `findNearestInteractableNpc` ниже исключает NPC из этого словаря, если
+ * состояние уже содержит его флаг — тот же принцип, что уже применяет сцена
+ * Родиона («Труба» глушит интеракцию после исхода, `docs/levels/01-truba.md`
+ * §11.5) и `once: true` у триггеров карты, просто для диалогов, у которых
+ * нет отдельного триггера. `npc.grinya`/`npc.sanitar`/`npc.serega_sachok`
+ * сюда не входят: их эффекты (`startQuest`, либо вовсе без эффектов)
+ * идемпотентны, повторный разговор безопасен и не портит экономику/сюжет.
+ */
+const ONE_SHOT_DIALOG_RESOLVED_FLAG: Readonly<Record<string, string>> = {
+  'npc.tolya': 'flag.otrabotka_tolya',
+  'npc.emissary_chistyh': 'flag.dlya_kolodtsa',
+  'npc.modest_busygin': 'flag.rubilnik',
+  'npc.palych': 'flag.palych_ubit',
+};
+
 async function loadDialog(fileName: string): Promise<Dialog> {
   const res = await fetch(`/data/dialogs/${fileName}.json`);
   if (!res.ok) throw new Error(`demo-scene: не удалось загрузить диалог «${fileName}» (${String(res.status)})`);
@@ -592,6 +614,8 @@ export async function createDemoScene(
       if (!spawnMarker || !transform) continue;
       const dialog = dialogsByNpcId.get(spawnMarker.refId);
       if (!dialog) continue;
+      const resolvedFlag = ONE_SHOT_DIALOG_RESOLVED_FLAG[spawnMarker.refId];
+      if (resolvedFlag !== undefined && gameState.flags[resolvedFlag] !== undefined) continue;
       const dx = transform.x - heroX;
       const dy = transform.y - heroY;
       const distSq = dx * dx + dy * dy;

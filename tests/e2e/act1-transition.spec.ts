@@ -79,6 +79,19 @@ test('Q1: Гаражи → Плотина → Панели через exits[], �
   await expect(yasnoChoice).toHaveCount(0);
 
   expect(await page.evaluate(() => window.__outfallDebug?.getFlag('flag.otrabotka_tolya'))).toBe('sdal');
+  expect(await page.evaluate(() => window.__outfallDebug?.getFlag('rep.progress2'))).toBe(15);
+
+  // Регрессия на P0 из пятой рецензии duxa-simulator (`duxa-review-vs-5.md`):
+  // диалог с необратимым выбором был бесконечно переигрываем — повторное
+  // «Отвести на отработку» утраивало `rep.progress2` вместо однократного
+  // применения. Отходим от Толи и возвращаемся — `[E]` больше не должен
+  // появляться (`ONE_SHOT_DIALOG_RESOLVED_FLAG` в `demo-scene.ts`).
+  await page.evaluate(() => window.__outfallDebug?.teleportHero(21, 20));
+  await page.waitForTimeout(300);
+  await page.evaluate(() => window.__outfallDebug?.teleportHero(21, 10));
+  await page.waitForTimeout(300);
+  await expect(page.locator('#fps-overlay')).not.toContainText('[E]', { timeout: 2000 });
+  expect(await page.evaluate(() => window.__outfallDebug?.getFlag('rep.progress2'))).toBe(15);
 
   expect(consoleErrors).toEqual([]);
 });
@@ -120,6 +133,57 @@ test('Q2: прямой заход на Плотину, диалог с Моде�
   await expect(mnogotochieChoice).toHaveCount(0);
 
   expect(await page.evaluate(() => window.__outfallDebug?.getFlag('flag.rubilnik'))).toBe('otklyuchil');
+
+  expect(consoleErrors).toEqual([]);
+});
+
+/**
+ * «Я кран» (`public/data/dialogs/act1-ya-kran.json`, npc.palych на (39,15) в
+ * `garazhi.json`) — сцена явно спроектирована как решение без права на
+ * повтор («убийство исполняется тем же выбором, что и пощада, без
+ * дополнительного подтверждения», `docs/narrative/quests/act1-derzost.md`
+ * §4). Пятая рецензия duxa-simulator поймала живьём: до фикса `[E]` у
+ * Палыча после исхода снова предлагал «убить/пощадить», будто признания не
+ * было. Регрессия — то же самое `ONE_SHOT_DIALOG_RESOLVED_FLAG`, что и в Q1.
+ */
+test('«Я кран»: убийство Палыча необратимо — повторный E ничего не предлагает', async ({ page }) => {
+  const consoleErrors: string[] = [];
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') consoleErrors.push(msg.text());
+  });
+  page.on('pageerror', (err) => consoleErrors.push(String(err)));
+
+  await startGame(page, '?map=garazhi');
+  await expect(page.locator('#game-canvas')).toBeVisible();
+  await expect(page.locator('#fps-overlay')).toHaveText(/FPS: \d+/, { timeout: 5000 });
+
+  await page.evaluate(() => window.__outfallDebug?.teleportHero(39, 16));
+  await expect(page.locator('#fps-overlay')).toContainText('[E]', { timeout: 5000 });
+
+  await page.keyboard.press('KeyE');
+  const dalsheChoice = page.getByRole('button', { name: 'И что дальше?' });
+  await expect(dalsheChoice).toBeVisible({ timeout: 3000 });
+  await dalsheChoice.click();
+
+  const ubitChoice = page.getByRole('button', { name: 'Убить Палыча.' });
+  await expect(ubitChoice).toBeVisible({ timeout: 3000 });
+  await ubitChoice.click();
+
+  const mnogotochieChoice = page.getByRole('button', { name: '...' });
+  await expect(mnogotochieChoice).toBeVisible({ timeout: 3000 });
+  await mnogotochieChoice.click();
+  await expect(mnogotochieChoice).toHaveCount(0);
+
+  expect(await page.evaluate(() => window.__outfallDebug?.getFlag('flag.palych_ubit'))).toBe(true);
+  expect(await page.evaluate(() => window.__outfallDebug?.getFlag('rep.progress2'))).toBe(-100);
+
+  // Отходим и возвращаемся — сцена не должна предложить выбор снова.
+  await page.evaluate(() => window.__outfallDebug?.teleportHero(39, 25));
+  await page.waitForTimeout(300);
+  await page.evaluate(() => window.__outfallDebug?.teleportHero(39, 16));
+  await page.waitForTimeout(300);
+  await expect(page.locator('#fps-overlay')).not.toContainText('[E]', { timeout: 2000 });
+  expect(await page.evaluate(() => window.__outfallDebug?.getFlag('rep.progress2'))).toBe(-100);
 
   expect(consoleErrors).toEqual([]);
 });
