@@ -1,0 +1,12 @@
+{
+  "id": "dialog.prolog_serega",
+  "npc": "npc.serega_sachok",
+  "start": "start",
+  "nodes": {
+    "start": {
+      "speaker": "npc.serega_sachok",
+      "textKey": "dialog.prolog_serega.start",
+      "choices": [{ "textKey": "dialog.prolog_serega.choice.ladno", "next": null }]
+    }
+  }
+}

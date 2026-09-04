@@ -198,10 +198,19 @@ async function loadRealTrubaMap(): Promise<GameMap> {
   return MapSchema.parse(await res.json());
 }
 
-/** NPC карты «Труба» (`npcs[].id` в `public/data/maps/truba.json`) → файл диалога в `public/data/dialogs/`. `npc.serega_sachok` — декоративный, без диалога (см. отчёт OF-025). */
+/**
+ * NPC карты «Труба» (`npcs[].id` в `public/data/maps/truba.json`) → файл
+ * диалога в `public/data/dialogs/`. `npc.serega_sachok` задокументирован в
+ * `docs/levels/01-truba.md` §1 как «первая шутка игры», но диалога не имел
+ * (`duxa-review-vs.md`, кринж-лист №5: «первая шутка игры — отсутствует
+ * физически») — `prolog-serega.json` закрывает это одной репликой в его
+ * голосе из `world-bible.md` §2.1 («балагур, называет раков крупными и
+ * мелкими, как на рынке»).
+ */
 const NPC_DIALOG_FILES: Readonly<Record<string, string>> = {
   'npc.sanitar': 'prolog-smotritel',
   'npc.rodion': 'prolog-vybor',
+  'npc.serega_sachok': 'prolog-serega',
 };
 
 async function loadDialog(fileName: string): Promise<Dialog> {

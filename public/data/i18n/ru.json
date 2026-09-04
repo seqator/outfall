@@ -33,5 +33,8 @@
 
   "dialog.prolog_kruchok.start": "Внимание на связи: Веденеев запросил мощность на НИИ. Опять.",
   "dialog.prolog_kruchok.choice.ponyal": "Понял.",
-  "dialog.prolog_kruchok.title": "Глава 1. Труба."
+  "dialog.prolog_kruchok.title": "Глава 1. Труба.",
+
+  "dialog.prolog_serega.start": "Э! Куда прёшь — тут не твоя охота. Крупных — на рынок, мелких — так, погонять для смеха.",
+  "dialog.prolog_serega.choice.ladno": "Ладно, не буду мешать бизнесу."
 }
