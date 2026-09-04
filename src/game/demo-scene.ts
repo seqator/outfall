@@ -325,6 +325,26 @@ function resolveInitialMapId(): string {
  * открывает диалог (см. `findNearestInteractableNpc` ниже —
  * `dialogsByNpcId.get` вернёт `undefined` и кандидат пропускается). Это
  * честная граница контента этой волны, не баг OF-051.
+ *
+ * OF-036/037 (Акты 2–3, `public/data/dialogs/act2-*.json`/`act3-final-*.json`,
+ * сверено с `.npc` каждого файла и NPC карт `sanatoriy.json`/`nii.json`/
+ * `truba_final.json`): Санаторий — `npc.doctor_solomin` («Святая вода»,
+ * хаб с двумя темами — про сад и предложение помочь лечебнице),
+ * `npc.sestra_lyuba` (продолжение травли колодцев, доступно только если
+ * `flag.dlya_kolodtsa = privel`), `npc.ded_frol` (альтернативный путь к
+ * той же улике сада, безопасен для повтора — не необратимый выбор).
+ * НИИ — `npc.vedeneev` («Шесть пальцев», поворот: вторая половина правды +
+ * судьба самого Веденеева), `npc.yuriy_sleptsov` (без последствий, decor).
+ * Финал в Трубе — пять NPC с суффиксом `_final` (отдельные id от Акта 1 —
+ * `npc.palych`/`npc.zoya`/`npc.doctor_solomin` уже могут быть «немыми»
+ * после Акта 1/2, движок пока не умеет условно прятать NPC по флагу,
+ * поэтому у финала свои, всегда видимые копии, см. отчёт OF-037):
+ * `npc.palych_final`/`npc.grinya_final`/`npc.zoya_final`/`npc.doctor_
+ * solomin_final` — присяга фракции (`flag.storona`), `npc.vedeneev_final`
+ * — судьба Веденеева, если сбежал в Акте 2 (запись ниже в
+ * `ONE_SHOT_DIALOG_RESOLVED_FLAG` даёт побочный эффект: если он уже
+ * `mertv`/`zhiv` с Акта 2, разговор в финале тоже недоступен — честное
+ * приближение к «спрятать NPC по флагу» без самой этой фичи).
  */
 const NPC_DIALOG_FILES: Readonly<Record<string, string>> = {
   'npc.sanitar': 'prolog-smotritel',
@@ -336,6 +356,16 @@ const NPC_DIALOG_FILES: Readonly<Record<string, string>> = {
   'npc.palych': 'act1-ya-kran',
   'npc.zoya': 'act1-klyuch-zoi',
   'npc.pereskazchik': 'act1-pereskazchik',
+  'npc.doctor_solomin': 'act2-sanatoriy-solomin',
+  'npc.sestra_lyuba': 'act2-sanatoriy-lyuba',
+  'npc.ded_frol': 'act2-sanatoriy-frol',
+  'npc.vedeneev': 'act2-nii-vedeneev',
+  'npc.yuriy_sleptsov': 'act2-nii-sleptsov',
+  'npc.palych_final': 'act3-final-palych',
+  'npc.grinya_final': 'act3-final-grinya',
+  'npc.zoya_final': 'act3-final-zoya',
+  'npc.doctor_solomin_final': 'act3-final-solomin',
+  'npc.vedeneev_final': 'act3-final-vedeneev',
 };
 
 /**
@@ -364,6 +394,29 @@ const ONE_SHOT_DIALOG_RESOLVED_FLAG: Readonly<Record<string, string>> = {
   // — разговор про Родиона не завязан на отдельный сюжетный выбор с
   // собственным флагом, только на уже существующий `flag.prolog_vybor`).
   'npc.zoya': 'flag.zoya_rodion_talk',
+  'npc.sestra_lyuba': 'flag.lyuba_ochishchenie',
+  // `npc.vedeneev`/`npc.vedeneev_final` намеренно делят один и тот же флаг:
+  // «убить/пощадить» в Акте 2 (`act2-nii-vedeneev.json`) — то же самое
+  // необратимое решение, что и «Я кран» у Палыча, а не отдельная сцена.
+  // Побочный эффект (документирован в отчёте OF-037): если игрок уже решил
+  // судьбу Веденеева в Акте 2, финальная копия NPC в Трубе тоже становится
+  // недоступной — приближение к «прятать NPC по флагу» (движок пока не умеет
+  // это буквально), но здесь оно случайно даёт верное поведение: мёртвый
+  // Веденеев не может появиться в финале.
+  'npc.vedeneev': 'flag.vedeneev_sudba',
+  'npc.vedeneev_final': 'flag.vedeneev_sudba',
+  // Присяга фракции (`main-quest.md` §2, Q5 «Кому качать») — один флаг на
+  // четырёх NPC-лидеров намеренно: `flag.storona` может быть присвоен только
+  // ОДИН раз за игру (герой выбирает одну сторону или нейтралитет в
+  // финальном разговоре с ОДНИМ лидером), поэтому как только флаг стоит —
+  // остальные три лидера тоже перестают предлагать присягу, а не только тот,
+  // с кем уже говорили. Без этого игрок мог бы обойти всех четверых подряд и
+  // менять решение до последнего — main-quest.md описывает разовый выбор, не
+  // раунд переговоров.
+  'npc.palych_final': 'flag.storona',
+  'npc.grinya_final': 'flag.storona',
+  'npc.zoya_final': 'flag.storona',
+  'npc.doctor_solomin_final': 'flag.storona',
 };
 
 async function loadDialog(fileName: string): Promise<Dialog> {

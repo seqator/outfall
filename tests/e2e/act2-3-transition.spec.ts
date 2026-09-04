@@ -163,3 +163,95 @@ test('Плотина → Труба-финал через exit_to_truba_final, �
 
   expect(consoleErrors).toEqual([]);
 });
+
+/**
+ * Веденеев (НИИ, «Шесть пальцев» — поворот) вживую: диалог с несколькими
+ * промежуточными узлами до необратимого «убить/пощадить» (тот же класс
+ * решения, что и «Я кран» у Палыча). Регрессия на `ONE_SHOT_DIALOG_
+ * RESOLVED_FLAG['npc.vedeneev'] = 'flag.vedeneev_sudba'` (`demo-scene.ts`,
+ * OF-036/037-волна) — без нового NPC в подключении из этой правки диалог
+ * просто не открылся бы вообще (сцена вообще недостижима до сегодняшнего
+ * коммита), а без флага в `ONE_SHOT_DIALOG_RESOLVED_FLAG` был бы тот же баг
+ * переигрываемости, что уже ловила пятая рецензия у «Я кран».
+ */
+test('НИИ: Веденеев — «убить» необратимо, повторный E ничего не предлагает', async ({ page }) => {
+  const consoleErrors: string[] = [];
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') consoleErrors.push(msg.text());
+  });
+  page.on('pageerror', (err) => consoleErrors.push(String(err)));
+
+  await startGame(page, '?map=nii');
+  await expect(page.locator('#game-canvas')).toBeVisible();
+  await expect(page.locator('#fps-overlay')).toHaveText(/FPS: \d+/, { timeout: 5000 });
+
+  // `npc.vedeneev` — (38,11) в `public/data/maps/nii.json`.
+  await page.evaluate(() => window.__outfallDebug?.teleportHero(38, 12));
+  await expect(page.locator('#fps-overlay')).toContainText('[E]', { timeout: 5000 });
+
+  await page.keyboard.press('KeyE');
+  const chtoSVodoy = page.getByRole('button', { name: 'Что вы сделали с водой в санатории?' });
+  await expect(chtoSVodoy).toBeVisible({ timeout: 3000 });
+  await chtoSVodoy.click();
+
+  const dostatochno = page.getByRole('button', { name: 'Этого достаточно. Что дальше с вами?' });
+  await expect(dostatochno).toBeVisible({ timeout: 3000 });
+  await dostatochno.click();
+
+  const prikonchit = page.getByRole('button', { name: 'Прикончить.' });
+  await expect(prikonchit).toBeVisible({ timeout: 3000 });
+  await prikonchit.click();
+
+  const mnogotochie = page.getByRole('button', { name: '...' });
+  await expect(mnogotochie).toBeVisible({ timeout: 3000 });
+  await mnogotochie.click();
+  await expect(mnogotochie).toHaveCount(0);
+
+  expect(await page.evaluate(() => window.__outfallDebug?.getFlag('flag.vedeneev_sudba'))).toBe('mertv');
+
+  await page.evaluate(() => window.__outfallDebug?.teleportHero(38, 20));
+  await page.waitForTimeout(300);
+  await page.evaluate(() => window.__outfallDebug?.teleportHero(38, 12));
+  await page.waitForTimeout(300);
+  await expect(page.locator('#fps-overlay')).not.toContainText('[E]', { timeout: 2000 });
+
+  expect(consoleErrors).toEqual([]);
+});
+
+/**
+ * Присяга фракции (финал в Трубе, Q5 «Кому качать») — регрессия на общий
+ * флаг `flag.storona` у всех четырёх лидеров в `ONE_SHOT_DIALOG_RESOLVED_
+ * FLAG`: после присяги одному лидеру остальные три тоже должны перестать
+ * предлагать выбор — `main-quest.md` §2 описывает разовое решение, не тур
+ * переговоров с правом передумать у каждого следующего.
+ */
+test('Труба-финал: присяга одному лидеру запирает предложение у остальных', async ({ page }) => {
+  const consoleErrors: string[] = [];
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') consoleErrors.push(msg.text());
+  });
+  page.on('pageerror', (err) => consoleErrors.push(String(err)));
+
+  await startGame(page, '?map=truba_final');
+  await expect(page.locator('#game-canvas')).toBeVisible();
+  await expect(page.locator('#fps-overlay')).toHaveText(/FPS: \d+/, { timeout: 5000 });
+
+  // `npc.zoya_final` — (20,20) в `public/data/maps/truba_final.json`.
+  await page.evaluate(() => window.__outfallDebug?.teleportHero(20, 21));
+  await expect(page.locator('#fps-overlay')).toContainText('[E]', { timeout: 5000 });
+
+  await page.keyboard.press('KeyE');
+  const prisyagnut = page.getByRole('button', { name: 'Присягаю Энергосбыту.' });
+  await expect(prisyagnut).toBeVisible({ timeout: 3000 });
+  await prisyagnut.click();
+  await expect(prisyagnut).toHaveCount(0);
+
+  expect(await page.evaluate(() => window.__outfallDebug?.getFlag('flag.storona'))).toBe('energosbyt');
+
+  // `npc.palych_final` — (12,20) — другой лидер, тот же запертый флаг.
+  await page.evaluate(() => window.__outfallDebug?.teleportHero(12, 21));
+  await page.waitForTimeout(300);
+  await expect(page.locator('#fps-overlay')).not.toContainText('[E]', { timeout: 2000 });
+
+  expect(consoleErrors).toEqual([]);
+});

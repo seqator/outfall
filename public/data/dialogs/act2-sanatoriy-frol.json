@@ -1,0 +1,32 @@
+{
+  "id": "dialog.sanatoriy_frol",
+  "npc": "npc.ded_frol",
+  "start": "start",
+  "nodes": {
+    "start": {
+      "speaker": "npc.ded_frol",
+      "textKey": "dialog.sanatoriy_frol.start",
+      "choices": [
+        {
+          "textKey": "dialog.sanatoriy_frol.choice.a_sad",
+          "next": "dogadka"
+        },
+        {
+          "textKey": "dialog.sanatoriy_frol.choice.ladno",
+          "next": null
+        }
+      ]
+    },
+    "dogadka": {
+      "speaker": "npc.ded_frol",
+      "textKey": "dialog.sanatoriy_frol.dogadka",
+      "choices": [
+        {
+          "textKey": "dialog.sanatoriy_frol.choice.spasibo",
+          "next": null,
+          "effects": [{ "op": "setFlag", "key": "flag.sad_ulika", "value": true }]
+        }
+      ]
+    }
+  }
+}

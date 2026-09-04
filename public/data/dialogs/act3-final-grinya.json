@@ -1,0 +1,37 @@
+{
+  "id": "dialog.final_grinya",
+  "npc": "npc.grinya_final",
+  "start": "start",
+  "nodes": {
+    "start": {
+      "speaker": "npc.grinya_final",
+      "textKey": "dialog.final_grinya.start",
+      "choices": [
+        {
+          "textKey": "dialog.final_grinya.choice.prisyagnut",
+          "next": "prisyaga_end",
+          "effects": [{ "op": "setFlag", "key": "flag.storona", "value": "progress2" }]
+        },
+        {
+          "textKey": "dialog.final.choice.neytralitet",
+          "next": "neytralitet_end",
+          "effects": [{ "op": "setFlag", "key": "flag.storona", "value": "neytralitet" }]
+        },
+        {
+          "textKey": "dialog.final_grinya.choice.ne_seychas",
+          "next": null
+        }
+      ]
+    },
+    "prisyaga_end": {
+      "speaker": "npc.grinya_final",
+      "textKey": "dialog.final_grinya.prisyaga_end",
+      "choices": [{ "textKey": "dialog.final.choice.mnogotochie", "next": null }]
+    },
+    "neytralitet_end": {
+      "speaker": "narrator",
+      "textKey": "dialog.final.neytralitet_end",
+      "choices": [{ "textKey": "dialog.final.choice.mnogotochie", "next": null }]
+    }
+  }
+}

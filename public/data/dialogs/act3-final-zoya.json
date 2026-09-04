@@ -1,0 +1,37 @@
+{
+  "id": "dialog.final_zoya",
+  "npc": "npc.zoya_final",
+  "start": "start",
+  "nodes": {
+    "start": {
+      "speaker": "npc.zoya_final",
+      "textKey": "dialog.final_zoya.start",
+      "choices": [
+        {
+          "textKey": "dialog.final_zoya.choice.prisyagnut",
+          "next": "prisyaga_end",
+          "effects": [{ "op": "setFlag", "key": "flag.storona", "value": "energosbyt" }]
+        },
+        {
+          "textKey": "dialog.final.choice.neytralitet",
+          "next": "neytralitet_end",
+          "effects": [{ "op": "setFlag", "key": "flag.storona", "value": "neytralitet" }]
+        },
+        {
+          "textKey": "dialog.final_zoya.choice.eshche_podumayu",
+          "next": null
+        }
+      ]
+    },
+    "prisyaga_end": {
+      "speaker": "npc.zoya_final",
+      "textKey": "dialog.final_zoya.prisyaga_end",
+      "choices": [{ "textKey": "dialog.final.choice.mnogotochie", "next": null }]
+    },
+    "neytralitet_end": {
+      "speaker": "narrator",
+      "textKey": "dialog.final.neytralitet_end",
+      "choices": [{ "textKey": "dialog.final.choice.mnogotochie", "next": null }]
+    }
+  }
+}

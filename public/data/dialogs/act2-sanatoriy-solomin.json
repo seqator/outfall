@@ -1,0 +1,85 @@
+{
+  "id": "dialog.sanatoriy_solomin",
+  "npc": "npc.doctor_solomin",
+  "start": "start",
+  "nodes": {
+    "start": {
+      "speaker": "npc.doctor_solomin",
+      "textKey": "dialog.sanatoriy_solomin.start",
+      "choices": [
+        {
+          "textKey": "dialog.sanatoriy_solomin.choice.pro_sad",
+          "next": "sad_pogoda"
+        },
+        {
+          "textKey": "dialog.sanatoriy_solomin.choice.pomoch",
+          "next": "lechebnitsa_offer",
+          "condition": { "op": "not", "condition": { "op": "flag", "key": "flag.q3_lechebnitsa", "eq": true } }
+        },
+        {
+          "textKey": "dialog.sanatoriy_solomin.choice.poka_ne_o_tom",
+          "next": null
+        }
+      ]
+    },
+    "sad_pogoda": {
+      "speaker": "npc.doctor_solomin",
+      "textKey": "dialog.sanatoriy_solomin.sad_pogoda",
+      "choices": [
+        {
+          "textKey": "dialog.sanatoriy_solomin.choice.smekalka_dogadka",
+          "next": "sad_ulika_end",
+          "check": { "stat": "smekalka", "dc": 5 }
+        },
+        {
+          "textKey": "dialog.sanatoriy_solomin.choice.medicina_dogadka",
+          "next": "sad_ulika_end",
+          "check": { "stat": "medicina", "dc": 5 }
+        },
+        {
+          "textKey": "dialog.sanatoriy_solomin.choice.uyti",
+          "next": null
+        }
+      ]
+    },
+    "sad_ulika_end": {
+      "speaker": "narrator",
+      "textKey": "dialog.sanatoriy_solomin.sad_ulika_end",
+      "choices": [
+        {
+          "textKey": "dialog.sanatoriy_solomin.choice.ponyal",
+          "next": null,
+          "effects": [{ "op": "setFlag", "key": "flag.sad_ulika", "value": true }]
+        }
+      ]
+    },
+    "lechebnitsa_offer": {
+      "speaker": "npc.doctor_solomin",
+      "textKey": "dialog.sanatoriy_solomin.lechebnitsa_offer",
+      "choices": [
+        {
+          "textKey": "dialog.sanatoriy_solomin.choice.pomogu",
+          "next": "lechebnitsa_pomog",
+          "effects": [
+            { "op": "setFlag", "key": "flag.q3_lechebnitsa", "value": true },
+            { "op": "incrementFlag", "key": "rep.chistye", "amount": 15 }
+          ]
+        },
+        {
+          "textKey": "dialog.sanatoriy_solomin.choice.ne_seychas",
+          "next": null
+        }
+      ]
+    },
+    "lechebnitsa_pomog": {
+      "speaker": "npc.doctor_solomin",
+      "textKey": "dialog.sanatoriy_solomin.lechebnitsa_pomog",
+      "choices": [
+        {
+          "textKey": "dialog.sanatoriy_solomin.choice.mnogotochie",
+          "next": null
+        }
+      ]
+    }
+  }
+}

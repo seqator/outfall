@@ -301,5 +301,321 @@
         }
       }
     ]
+  },
+  {
+    "id": "quest.svyataya_voda",
+    "titleKey": "quest.svyataya_voda.title",
+    "stages": [
+      {
+        "id": "start",
+        "descKey": "quest.svyataya_voda.stage.start",
+        "onEnter": [],
+        "complete": { "op": "flag", "key": "flag.palych_pravda", "eq": true }
+      },
+      {
+        "id": "sad_ulika",
+        "descKey": "quest.svyataya_voda.stage.sad_ulika",
+        "onEnter": [{ "op": "setFlag", "key": "flag.sad_ulika", "value": true }],
+        "complete": { "op": "flag", "key": "flag.sad_ulika", "eq": true }
+      },
+      {
+        "id": "lyuba_prodolzhil",
+        "descKey": "quest.svyataya_voda.stage.lyuba_prodolzhil",
+        "onEnter": [
+          { "op": "setFlag", "key": "flag.lyuba_ochishchenie", "value": "prodolzhil" },
+          { "op": "incrementFlag", "key": "rep.chistye", "amount": 10 }
+        ],
+        "complete": { "op": "flag", "key": "flag.lyuba_ochishchenie", "eq": "prodolzhil" }
+      },
+      {
+        "id": "lyuba_otkazal",
+        "descKey": "quest.svyataya_voda.stage.lyuba_otkazal",
+        "onEnter": [{ "op": "setFlag", "key": "flag.lyuba_ochishchenie", "value": "otkazal" }],
+        "complete": { "op": "flag", "key": "flag.lyuba_ochishchenie", "eq": "otkazal" }
+      },
+      {
+        "id": "pomoch_lechebnitse",
+        "descKey": "quest.svyataya_voda.stage.pomoch_lechebnitse",
+        "onEnter": [
+          { "op": "setFlag", "key": "flag.q3_lechebnitsa", "value": true },
+          { "op": "incrementFlag", "key": "rep.chistye", "amount": 15 },
+          { "op": "xp", "amount": 40 }
+        ],
+        "complete": { "op": "flag", "key": "flag.q3_lechebnitsa", "eq": true }
+      },
+      {
+        "id": "done",
+        "descKey": "quest.svyataya_voda.stage.done",
+        "onEnter": [
+          { "op": "setFlag", "key": "flag.q3_done", "value": true },
+          { "op": "xp", "amount": 120 }
+        ],
+        "complete": { "op": "flag", "key": "flag.sad_ulika", "eq": true }
+      }
+    ]
+  },
+  {
+    "id": "quest.shest_paltsev",
+    "titleKey": "quest.shest_paltsev.title",
+    "stages": [
+      {
+        "id": "start",
+        "descKey": "quest.shest_paltsev.stage.start",
+        "onEnter": [],
+        "complete": { "op": "questStage", "quest": "quest.svyataya_voda", "stage": "done", "cmp": "atLeast" }
+      },
+      {
+        "id": "vtoraya_pravda_arhiv",
+        "descKey": "quest.shest_paltsev.stage.vtoraya_pravda_arhiv",
+        "onEnter": [{ "op": "setFlag", "key": "flag.vtoraya_pravda", "value": "arhiv" }],
+        "complete": { "op": "flag", "key": "flag.vtoraya_pravda", "eq": "arhiv" }
+      },
+      {
+        "id": "vtoraya_pravda_oba",
+        "descKey": "quest.shest_paltsev.stage.vtoraya_pravda_oba",
+        "onEnter": [{ "op": "setFlag", "key": "flag.vtoraya_pravda", "value": "oba" }],
+        "complete": { "op": "flag", "key": "flag.vtoraya_pravda", "eq": "oba" }
+      },
+      {
+        "id": "shtamm0_pravda",
+        "descKey": "quest.shest_paltsev.stage.shtamm0_pravda",
+        "onEnter": [{ "op": "setFlag", "key": "flag.shtamm0_pravda", "value": true }],
+        "complete": { "op": "flag", "key": "flag.shtamm0_pravda", "eq": true }
+      },
+      {
+        "id": "shtamm0_tochnaya_cifra",
+        "descKey": "quest.shest_paltsev.stage.shtamm0_tochnaya_cifra",
+        "onEnter": [
+          { "op": "setFlag", "key": "flag.shtamm0_tochnaya_cifra", "value": true },
+          { "op": "xp", "amount": 30 }
+        ],
+        "complete": {
+          "op": "any",
+          "conditions": [
+            { "op": "skill", "skill": "rech", "gte": 6 },
+            { "op": "skill", "skill": "vzlom", "gte": 6 }
+          ]
+        }
+      },
+      {
+        "id": "vedeneev_ubit",
+        "descKey": "quest.shest_paltsev.stage.vedeneev_ubit",
+        "onEnter": [{ "op": "setFlag", "key": "flag.vedeneev_sudba", "value": "mertv" }],
+        "complete": { "op": "flag", "key": "flag.vedeneev_sudba", "eq": "mertv" }
+      },
+      {
+        "id": "vedeneev_ushel",
+        "descKey": "quest.shest_paltsev.stage.vedeneev_ushel",
+        "onEnter": [{ "op": "setFlag", "key": "flag.vedeneev_sudba", "value": "zhiv" }],
+        "complete": { "op": "flag", "key": "flag.vedeneev_sudba", "eq": "zhiv" }
+      },
+      {
+        "id": "podderzhka_palycha",
+        "descKey": "quest.shest_paltsev.stage.podderzhka_palycha",
+        "onEnter": [
+          { "op": "setFlag", "key": "flag.q4_komu_skazal_palychu", "value": true },
+          { "op": "incrementFlag", "key": "rep.progress2", "amount": 20 },
+          { "op": "xp", "amount": 30 }
+        ],
+        "complete": { "op": "flag", "key": "flag.q4_komu_skazal_palychu", "eq": true }
+      },
+      {
+        "id": "otkrytie_zoi",
+        "descKey": "quest.shest_paltsev.stage.otkrytie_zoi",
+        "onEnter": [
+          { "op": "setFlag", "key": "flag.q4_komu_skazal_zoe", "value": true },
+          { "op": "incrementFlag", "key": "rep.energosbyt", "amount": 15 },
+          { "op": "xp", "amount": 30 }
+        ],
+        "complete": { "op": "flag", "key": "flag.q4_komu_skazal_zoe", "eq": true }
+      },
+      {
+        "id": "sokhranit_taynu_energosbyta",
+        "descKey": "quest.shest_paltsev.stage.sokhranit_taynu_energosbyta",
+        "onEnter": [
+          { "op": "setFlag", "key": "flag.q4_tayna_energosbyta", "value": "sohranil" },
+          { "op": "incrementFlag", "key": "rep.energosbyt", "amount": 15 },
+          { "op": "xp", "amount": 20 }
+        ],
+        "complete": { "op": "flag", "key": "flag.q4_tayna_energosbyta", "eq": "sohranil" }
+      },
+      {
+        "id": "razoblachit_taynu_energosbyta",
+        "descKey": "quest.shest_paltsev.stage.razoblachit_taynu_energosbyta",
+        "onEnter": [
+          { "op": "setFlag", "key": "flag.q4_tayna_energosbyta", "value": "razoblachil" },
+          { "op": "incrementFlag", "key": "rep.energosbyt", "amount": -15 },
+          { "op": "incrementFlag", "key": "rep.chistye", "amount": 10 },
+          { "op": "xp", "amount": 20 }
+        ],
+        "complete": { "op": "flag", "key": "flag.q4_tayna_energosbyta", "eq": "razoblachil" }
+      },
+      {
+        "id": "preduprezhdenie_solomina",
+        "descKey": "quest.shest_paltsev.stage.preduprezhdenie_solomina",
+        "onEnter": [
+          { "op": "setFlag", "key": "flag.q4_predupredil_solomina", "value": true },
+          { "op": "incrementFlag", "key": "rep.chistye", "amount": 25 },
+          { "op": "xp", "amount": 40 }
+        ],
+        "complete": { "op": "flag", "key": "flag.q4_predupredil_solomina", "eq": true }
+      },
+      {
+        "id": "done",
+        "descKey": "quest.shest_paltsev.stage.done",
+        "onEnter": [
+          { "op": "setFlag", "key": "flag.q4_done", "value": true },
+          { "op": "xp", "amount": 150 }
+        ],
+        "complete": { "op": "flag", "key": "flag.shtamm0_pravda", "eq": true }
+      }
+    ]
+  },
+  {
+    "id": "quest.komu_kachat",
+    "titleKey": "quest.komu_kachat.title",
+    "stages": [
+      {
+        "id": "start",
+        "descKey": "quest.komu_kachat.stage.start",
+        "onEnter": [],
+        "complete": { "op": "flag", "key": "flag.shtamm0_pravda", "eq": true }
+      },
+      {
+        "id": "prisyaga_progress2",
+        "descKey": "quest.komu_kachat.stage.prisyaga_progress2",
+        "onEnter": [{ "op": "setFlag", "key": "flag.storona", "value": "progress2" }],
+        "complete": { "op": "flag", "key": "flag.storona", "eq": "progress2" }
+      },
+      {
+        "id": "prisyaga_energosbyt",
+        "descKey": "quest.komu_kachat.stage.prisyaga_energosbyt",
+        "onEnter": [{ "op": "setFlag", "key": "flag.storona", "value": "energosbyt" }],
+        "complete": { "op": "flag", "key": "flag.storona", "eq": "energosbyt" }
+      },
+      {
+        "id": "prisyaga_chistye",
+        "descKey": "quest.komu_kachat.stage.prisyaga_chistye",
+        "onEnter": [{ "op": "setFlag", "key": "flag.storona", "value": "chistye" }],
+        "complete": { "op": "flag", "key": "flag.storona", "eq": "chistye" }
+      },
+      {
+        "id": "prisyaga_neytralitet",
+        "descKey": "quest.komu_kachat.stage.prisyaga_neytralitet",
+        "onEnter": [{ "op": "setFlag", "key": "flag.storona", "value": "neytralitet" }],
+        "complete": { "op": "flag", "key": "flag.storona", "eq": "neytralitet" }
+      },
+      {
+        "id": "done",
+        "descKey": "quest.komu_kachat.stage.done",
+        "onEnter": [
+          { "op": "setFlag", "key": "flag.q5_done", "value": true },
+          { "op": "xp", "amount": 100 }
+        ],
+        "complete": {
+          "op": "any",
+          "conditions": [
+            { "op": "flag", "key": "flag.storona", "eq": "progress2" },
+            { "op": "flag", "key": "flag.storona", "eq": "energosbyt" },
+            { "op": "flag", "key": "flag.storona", "eq": "chistye" },
+            { "op": "flag", "key": "flag.storona", "eq": "neytralitet" }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "quest.truba_final",
+    "titleKey": "quest.truba_final.title",
+    "stages": [
+      {
+        "id": "start",
+        "descKey": "quest.truba_final.stage.start",
+        "onEnter": [],
+        "complete": {
+          "op": "any",
+          "conditions": [
+            { "op": "flag", "key": "flag.storona", "eq": "progress2" },
+            { "op": "flag", "key": "flag.storona", "eq": "energosbyt" },
+            { "op": "flag", "key": "flag.storona", "eq": "chistye" },
+            { "op": "flag", "key": "flag.storona", "eq": "neytralitet" }
+          ]
+        }
+      },
+      {
+        "id": "vtoroy_sbros",
+        "descKey": "quest.truba_final.stage.vtoroy_sbros",
+        "onEnter": [
+          { "op": "setFlag", "key": "flag.truba_deystviye", "value": "vtoroy_sbros" },
+          { "op": "setFlag", "key": "flag.energosbyt_final", "value": "polny_sbros" },
+          { "op": "xp", "amount": 200 }
+        ],
+        "complete": { "op": "flag", "key": "flag.truba_deystviye", "eq": "vtoroy_sbros" }
+      },
+      {
+        "id": "po_schetchiku",
+        "descKey": "quest.truba_final.stage.po_schetchiku",
+        "onEnter": [
+          { "op": "setFlag", "key": "flag.truba_deystviye", "value": "po_schetchiku" },
+          { "op": "setFlag", "key": "flag.energosbyt_final", "value": "dozirovka" },
+          { "op": "xp", "amount": 200 }
+        ],
+        "complete": { "op": "flag", "key": "flag.truba_deystviye", "eq": "po_schetchiku" }
+      },
+      {
+        "id": "vzryv_plotiny",
+        "descKey": "quest.truba_final.stage.vzryv_plotiny",
+        "onEnter": [
+          { "op": "setFlag", "key": "flag.truba_deystviye", "value": "vzryv_plotiny" },
+          { "op": "xp", "amount": 200 }
+        ],
+        "complete": { "op": "flag", "key": "flag.truba_deystviye", "eq": "vzryv_plotiny" }
+      },
+      {
+        "id": "chugunny_vek",
+        "descKey": "quest.truba_final.stage.chugunny_vek",
+        "onEnter": [
+          { "op": "setFlag", "key": "flag.truba_deystviye", "value": "chugunny_vek" },
+          { "op": "xp", "amount": 200 }
+        ],
+        "complete": { "op": "flag", "key": "flag.truba_deystviye", "eq": "chugunny_vek" }
+      },
+      {
+        "id": "ochen_chisty",
+        "descKey": "quest.truba_final.stage.ochen_chisty",
+        "onEnter": [
+          { "op": "setFlag", "key": "flag.truba_deystviye", "value": "ochen_chisty" },
+          { "op": "xp", "amount": 200 }
+        ],
+        "complete": {
+          "op": "all",
+          "conditions": [
+            { "op": "flag", "key": "flag.truba_deystviye", "eq": "ochen_chisty" },
+            { "op": "not", "condition": { "op": "stat", "stat": "smekalka", "gte": 4 } }
+          ]
+        }
+      },
+      {
+        "id": "vedeneev_sbezhal",
+        "descKey": "quest.truba_final.stage.vedeneev_sbezhal",
+        "onEnter": [{ "op": "setFlag", "key": "flag.vedeneev_sudba", "value": "sbezhal" }],
+        "complete": { "op": "flag", "key": "flag.vedeneev_sudba", "eq": "sbezhal" }
+      },
+      {
+        "id": "done",
+        "descKey": "quest.truba_final.stage.done",
+        "onEnter": [{ "op": "setFlag", "key": "flag.game_completed", "value": true }],
+        "complete": {
+          "op": "any",
+          "conditions": [
+            { "op": "flag", "key": "flag.truba_deystviye", "eq": "vtoroy_sbros" },
+            { "op": "flag", "key": "flag.truba_deystviye", "eq": "po_schetchiku" },
+            { "op": "flag", "key": "flag.truba_deystviye", "eq": "vzryv_plotiny" },
+            { "op": "flag", "key": "flag.truba_deystviye", "eq": "chugunny_vek" },
+            { "op": "flag", "key": "flag.truba_deystviye", "eq": "ochen_chisty" }
+          ]
+        }
+      }
+    ]
   }
 ]

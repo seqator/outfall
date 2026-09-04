@@ -1,0 +1,32 @@
+{
+  "id": "dialog.final_vedeneev",
+  "npc": "npc.vedeneev_final",
+  "start": "start",
+  "nodes": {
+    "start": {
+      "speaker": "npc.vedeneev_final",
+      "textKey": "dialog.final_vedeneev.start",
+      "choices": [
+        {
+          "textKey": "dialog.final_vedeneev.choice.pust_uhodit",
+          "next": "sbezhal_end",
+          "effects": [{ "op": "setFlag", "key": "flag.vedeneev_sudba", "value": "sbezhal" }]
+        },
+        {
+          "textKey": "dialog.final_vedeneev.choice.ostavaysya",
+          "next": "ostalsya_end"
+        }
+      ]
+    },
+    "sbezhal_end": {
+      "speaker": "narrator",
+      "textKey": "dialog.final_vedeneev.sbezhal_end",
+      "choices": [{ "textKey": "dialog.final.choice.mnogotochie", "next": null }]
+    },
+    "ostalsya_end": {
+      "speaker": "npc.vedeneev_final",
+      "textKey": "dialog.final_vedeneev.ostalsya_end",
+      "choices": [{ "textKey": "dialog.final.choice.mnogotochie", "next": null }]
+    }
+  }
+}

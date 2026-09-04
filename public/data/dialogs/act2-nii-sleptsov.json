@@ -1,0 +1,31 @@
+{
+  "id": "dialog.nii_sleptsov",
+  "npc": "npc.yuriy_sleptsov",
+  "start": "start",
+  "nodes": {
+    "start": {
+      "speaker": "npc.yuriy_sleptsov",
+      "textKey": "dialog.nii_sleptsov.start",
+      "choices": [
+        {
+          "textKey": "dialog.nii_sleptsov.choice.mnenie",
+          "next": "mnenie"
+        },
+        {
+          "textKey": "dialog.nii_sleptsov.choice.ladno",
+          "next": null
+        }
+      ]
+    },
+    "mnenie": {
+      "speaker": "npc.yuriy_sleptsov",
+      "textKey": "dialog.nii_sleptsov.mnenie",
+      "choices": [
+        {
+          "textKey": "dialog.nii_sleptsov.choice.spasibo",
+          "next": null
+        }
+      ]
+    }
+  }
+}

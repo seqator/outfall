@@ -1,0 +1,37 @@
+{
+  "id": "dialog.final_solomin",
+  "npc": "npc.doctor_solomin_final",
+  "start": "start",
+  "nodes": {
+    "start": {
+      "speaker": "npc.doctor_solomin_final",
+      "textKey": "dialog.final_solomin.start",
+      "choices": [
+        {
+          "textKey": "dialog.final_solomin.choice.prisyagnut",
+          "next": "prisyaga_end",
+          "effects": [{ "op": "setFlag", "key": "flag.storona", "value": "chistye" }]
+        },
+        {
+          "textKey": "dialog.final.choice.neytralitet",
+          "next": "neytralitet_end",
+          "effects": [{ "op": "setFlag", "key": "flag.storona", "value": "neytralitet" }]
+        },
+        {
+          "textKey": "dialog.final_solomin.choice.eshche_podumayu",
+          "next": null
+        }
+      ]
+    },
+    "prisyaga_end": {
+      "speaker": "npc.doctor_solomin_final",
+      "textKey": "dialog.final_solomin.prisyaga_end",
+      "choices": [{ "textKey": "dialog.final.choice.mnogotochie", "next": null }]
+    },
+    "neytralitet_end": {
+      "speaker": "narrator",
+      "textKey": "dialog.final.neytralitet_end",
+      "choices": [{ "textKey": "dialog.final.choice.mnogotochie", "next": null }]
+    }
+  }
+}

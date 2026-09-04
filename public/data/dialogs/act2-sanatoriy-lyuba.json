@@ -1,0 +1,51 @@
+{
+  "id": "dialog.sanatoriy_lyuba",
+  "npc": "npc.sestra_lyuba",
+  "start": "start",
+  "nodes": {
+    "start": {
+      "speaker": "npc.sestra_lyuba",
+      "textKey": "dialog.sanatoriy_lyuba.start",
+      "choices": [
+        {
+          "textKey": "dialog.sanatoriy_lyuba.choice.slushayu",
+          "next": "ochishchenie_offer",
+          "condition": { "op": "flag", "key": "flag.dlya_kolodtsa", "eq": "privel" }
+        },
+        {
+          "textKey": "dialog.sanatoriy_lyuba.choice.ne_seychas",
+          "next": null
+        }
+      ]
+    },
+    "ochishchenie_offer": {
+      "speaker": "npc.sestra_lyuba",
+      "textKey": "dialog.sanatoriy_lyuba.ochishchenie_offer",
+      "choices": [
+        {
+          "textKey": "dialog.sanatoriy_lyuba.choice.da_pomogu",
+          "next": "prodolzhil",
+          "effects": [
+            { "op": "setFlag", "key": "flag.lyuba_ochishchenie", "value": "prodolzhil" },
+            { "op": "incrementFlag", "key": "rep.chistye", "amount": 10 }
+          ]
+        },
+        {
+          "textKey": "dialog.sanatoriy_lyuba.choice.net_dovolno",
+          "next": "otkazal",
+          "effects": [{ "op": "setFlag", "key": "flag.lyuba_ochishchenie", "value": "otkazal" }]
+        }
+      ]
+    },
+    "prodolzhil": {
+      "speaker": "npc.sestra_lyuba",
+      "textKey": "dialog.sanatoriy_lyuba.prodolzhil",
+      "choices": [{ "textKey": "dialog.sanatoriy_lyuba.choice.mnogotochie", "next": null }]
+    },
+    "otkazal": {
+      "speaker": "npc.sestra_lyuba",
+      "textKey": "dialog.sanatoriy_lyuba.otkazal",
+      "choices": [{ "textKey": "dialog.sanatoriy_lyuba.choice.mnogotochie", "next": null }]
+    }
+  }
+}

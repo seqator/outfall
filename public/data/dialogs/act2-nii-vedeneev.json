@@ -1,0 +1,140 @@
+{
+  "id": "dialog.nii_vedeneev",
+  "npc": "npc.vedeneev",
+  "start": "start",
+  "nodes": {
+    "start": {
+      "speaker": "npc.vedeneev",
+      "textKey": "dialog.nii_vedeneev.start",
+      "choices": [
+        {
+          "textKey": "dialog.nii_vedeneev.choice.kto_prikazal",
+          "next": "pravda_vopros"
+        },
+        {
+          "textKey": "dialog.nii_vedeneev.choice.chto_s_vodoy",
+          "next": "shtamm0_vopros"
+        }
+      ]
+    },
+    "pravda_vopros": {
+      "speaker": "npc.vedeneev",
+      "textKey": "dialog.nii_vedeneev.pravda_vopros",
+      "choices": [
+        {
+          "textKey": "dialog.nii_vedeneev.choice.k_arhivu",
+          "next": "arhiv_dokumenty"
+        }
+      ]
+    },
+    "arhiv_dokumenty": {
+      "speaker": "narrator",
+      "textKey": "dialog.nii_vedeneev.arhiv_dokumenty",
+      "choices": [
+        {
+          "textKey": "dialog.nii_vedeneev.choice.sovpadaet_s_palychem",
+          "next": "vtoraya_pravda_oba_end",
+          "condition": { "op": "flag", "key": "flag.q1_remont_hint", "eq": true }
+        },
+        {
+          "textKey": "dialog.nii_vedeneev.choice.tarasov_otec_zoi",
+          "next": "vtoraya_pravda_arhiv_end",
+          "condition": { "op": "not", "condition": { "op": "flag", "key": "flag.q1_remont_hint", "eq": true } }
+        }
+      ]
+    },
+    "vtoraya_pravda_oba_end": {
+      "speaker": "narrator",
+      "textKey": "dialog.nii_vedeneev.vtoraya_pravda_end",
+      "choices": [
+        {
+          "textKey": "dialog.nii_vedeneev.choice.dalshe",
+          "next": "shtamm0_vopros",
+          "effects": [{ "op": "setFlag", "key": "flag.vtoraya_pravda", "value": "oba" }]
+        }
+      ]
+    },
+    "vtoraya_pravda_arhiv_end": {
+      "speaker": "narrator",
+      "textKey": "dialog.nii_vedeneev.vtoraya_pravda_end",
+      "choices": [
+        {
+          "textKey": "dialog.nii_vedeneev.choice.dalshe",
+          "next": "shtamm0_vopros",
+          "effects": [{ "op": "setFlag", "key": "flag.vtoraya_pravda", "value": "arhiv" }]
+        }
+      ]
+    },
+    "shtamm0_vopros": {
+      "speaker": "npc.vedeneev",
+      "textKey": "dialog.nii_vedeneev.shtamm0_vopros",
+      "choices": [
+        {
+          "textKey": "dialog.nii_vedeneev.choice.tochnaya_cifra_rech",
+          "next": "cifra_tochno",
+          "check": { "stat": "rech", "dc": 6 },
+          "effects": [{ "op": "setFlag", "key": "flag.shtamm0_pravda", "value": true }]
+        },
+        {
+          "textKey": "dialog.nii_vedeneev.choice.tochnaya_cifra_vzlom",
+          "next": "cifra_vzlom",
+          "check": { "stat": "vzlom", "dc": 6 },
+          "effects": [{ "op": "setFlag", "key": "flag.shtamm0_pravda", "value": true }]
+        },
+        {
+          "textKey": "dialog.nii_vedeneev.choice.dostatochno",
+          "next": "vedeneev_sudba_vybor",
+          "effects": [{ "op": "setFlag", "key": "flag.shtamm0_pravda", "value": true }]
+        }
+      ]
+    },
+    "cifra_tochno": {
+      "speaker": "npc.vedeneev",
+      "textKey": "dialog.nii_vedeneev.cifra_tochno",
+      "choices": [
+        {
+          "textKey": "dialog.nii_vedeneev.choice.chto_dalshe",
+          "next": "vedeneev_sudba_vybor",
+          "effects": [{ "op": "setFlag", "key": "flag.shtamm0_tochnaya_cifra", "value": true }]
+        }
+      ]
+    },
+    "cifra_vzlom": {
+      "speaker": "narrator",
+      "textKey": "dialog.nii_vedeneev.cifra_vzlom",
+      "choices": [
+        {
+          "textKey": "dialog.nii_vedeneev.choice.chto_dalshe",
+          "next": "vedeneev_sudba_vybor",
+          "effects": [{ "op": "setFlag", "key": "flag.shtamm0_tochnaya_cifra", "value": true }]
+        }
+      ]
+    },
+    "vedeneev_sudba_vybor": {
+      "speaker": "npc.vedeneev",
+      "textKey": "dialog.nii_vedeneev.sudba_vybor",
+      "choices": [
+        {
+          "textKey": "dialog.nii_vedeneev.choice.prikonchit",
+          "next": "vedeneev_ubil",
+          "effects": [{ "op": "setFlag", "key": "flag.vedeneev_sudba", "value": "mertv" }]
+        },
+        {
+          "textKey": "dialog.nii_vedeneev.choice.uyti",
+          "next": "vedeneev_ushel",
+          "effects": [{ "op": "setFlag", "key": "flag.vedeneev_sudba", "value": "zhiv" }]
+        }
+      ]
+    },
+    "vedeneev_ubil": {
+      "speaker": "narrator",
+      "textKey": "dialog.nii_vedeneev.ubil",
+      "choices": [{ "textKey": "dialog.nii_vedeneev.choice.mnogotochie", "next": null }]
+    },
+    "vedeneev_ushel": {
+      "speaker": "npc.vedeneev",
+      "textKey": "dialog.nii_vedeneev.ushel",
+      "choices": [{ "textKey": "dialog.nii_vedeneev.choice.mnogotochie", "next": null }]
+    }
+  }
+}
