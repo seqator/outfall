@@ -126,6 +126,18 @@ describe('interpreter: applyEffect — по одному на каждый ти�
     expect(state.flags['flag.prolog_vybor']).toBe('spas');
   });
 
+  it('incrementFlag — прибавляет к текущему числовому флагу, а не перезаписывает', () => {
+    const started = applyEffect(createGameState(), { op: 'incrementFlag', key: 'rep.progress2', amount: 15 });
+    expect(started.flags['rep.progress2']).toBe(15);
+    const again = applyEffect(started, { op: 'incrementFlag', key: 'rep.progress2', amount: -10 });
+    expect(again.flags['rep.progress2']).toBe(5);
+  });
+
+  it('incrementFlag — амаунт может быть отрицательным, флаг без предыдущего значения стартует с 0', () => {
+    const state = applyEffect(createGameState(), { op: 'incrementFlag', key: 'rep.chistye', amount: -10 });
+    expect(state.flags['rep.chistye']).toBe(-10);
+  });
+
   it('giveItem — кладёт предмет в инвентарь через InventoryPort', () => {
     const state = applyEffect(createGameState(), { op: 'giveItem', item: 'item.klyuch', count: 1 });
     expect(state.inventory.hasItem('item.klyuch', 1)).toBe(true);

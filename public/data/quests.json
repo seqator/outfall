@@ -19,7 +19,7 @@
         "id": "otrabotka_sdal",
         "descKey": "quest.svoi_truby.stage.otrabotka_sdal",
         "onEnter": [
-          { "op": "setFlag", "key": "rep.progress2", "value": 15 },
+          { "op": "incrementFlag", "key": "rep.progress2", "amount": 15 },
           { "op": "giveItem", "item": "item.mat_detali", "count": 5 },
           { "op": "xp", "amount": 50 }
         ],
@@ -29,7 +29,7 @@
         "id": "otrabotka_otkazal",
         "descKey": "quest.svoi_truby.stage.otrabotka_otkazal",
         "onEnter": [
-          { "op": "setFlag", "key": "rep.progress2", "value": -5 },
+          { "op": "incrementFlag", "key": "rep.progress2", "amount": -5 },
           { "op": "xp", "amount": 50 }
         ],
         "complete": { "op": "flag", "key": "flag.otrabotka_tolya", "eq": "otkazal" }
@@ -81,8 +81,8 @@
         "descKey": "quest.klyuch_tarifnicy.stage.rubilnik_otklyuchil",
         "onEnter": [
           { "op": "setFlag", "key": "flag.rubilnik", "value": "otklyuchil" },
-          { "op": "setFlag", "key": "rep.energosbyt", "value": 15 },
-          { "op": "setFlag", "key": "rep.progress2", "value": -10 }
+          { "op": "incrementFlag", "key": "rep.energosbyt", "amount": 15 },
+          { "op": "incrementFlag", "key": "rep.progress2", "amount": -10 }
         ],
         "complete": { "op": "flag", "key": "flag.rubilnik", "eq": "otklyuchil" }
       },
@@ -91,7 +91,7 @@
         "descKey": "quest.klyuch_tarifnicy.stage.rubilnik_otkazal",
         "onEnter": [
           { "op": "setFlag", "key": "flag.rubilnik", "value": "otkazal" },
-          { "op": "setFlag", "key": "rep.energosbyt", "value": -10 }
+          { "op": "incrementFlag", "key": "rep.energosbyt", "amount": -10 }
         ],
         "complete": { "op": "flag", "key": "flag.rubilnik", "eq": "otkazal" }
       },
@@ -100,7 +100,7 @@
         "descKey": "quest.klyuch_tarifnicy.stage.dlya_kolodtsa_privel",
         "onEnter": [
           { "op": "setFlag", "key": "flag.dlya_kolodtsa", "value": "privel" },
-          { "op": "setFlag", "key": "rep.chistye", "value": 15 }
+          { "op": "incrementFlag", "key": "rep.chistye", "amount": 15 }
         ],
         "complete": { "op": "flag", "key": "flag.dlya_kolodtsa", "eq": "privel" }
       },
@@ -109,7 +109,7 @@
         "descKey": "quest.klyuch_tarifnicy.stage.dlya_kolodtsa_otkazal",
         "onEnter": [
           { "op": "setFlag", "key": "flag.dlya_kolodtsa", "value": "otkazal" },
-          { "op": "setFlag", "key": "rep.chistye", "value": -10 }
+          { "op": "incrementFlag", "key": "rep.chistye", "amount": -10 }
         ],
         "complete": { "op": "flag", "key": "flag.dlya_kolodtsa", "eq": "otkazal" }
       },
@@ -157,7 +157,7 @@
         "descKey": "quest.med_dlya_semyorki.stage.vymenyal",
         "onEnter": [
           { "op": "setFlag", "key": "flag.med_semyorki", "value": "vymenyal" },
-          { "op": "setFlag", "key": "rep.progress2", "value": 10 }
+          { "op": "incrementFlag", "key": "rep.progress2", "amount": 10 }
         ],
         "complete": { "op": "flag", "key": "flag.med_semyorki", "eq": "vymenyal" }
       },
@@ -166,8 +166,8 @@
         "descKey": "quest.med_dlya_semyorki.stage.sorval",
         "onEnter": [
           { "op": "setFlag", "key": "flag.med_semyorki", "value": "sorval" },
-          { "op": "setFlag", "key": "rep.progress2", "value": 10 },
-          { "op": "setFlag", "key": "rep.energosbyt", "value": -15 }
+          { "op": "incrementFlag", "key": "rep.progress2", "amount": 10 },
+          { "op": "incrementFlag", "key": "rep.energosbyt", "amount": -15 }
         ],
         "complete": { "op": "flag", "key": "flag.med_semyorki", "eq": "sorval" }
       },
@@ -206,7 +206,7 @@
         "descKey": "quest.tolya_chto_dalshe.stage.oblegchil",
         "onEnter": [
           { "op": "setFlag", "key": "flag.tolya_ishod", "value": "oblegchil" },
-          { "op": "setFlag", "key": "rep.progress2", "value": -5 }
+          { "op": "incrementFlag", "key": "rep.progress2", "amount": -5 }
         ],
         "complete": { "op": "flag", "key": "flag.tolya_ishod", "eq": "oblegchil" }
       },
@@ -215,7 +215,7 @@
         "descKey": "quest.tolya_chto_dalshe.stage.ostavil",
         "onEnter": [
           { "op": "setFlag", "key": "flag.tolya_ishod", "value": "ostavil" },
-          { "op": "setFlag", "key": "rep.progress2", "value": 5 }
+          { "op": "incrementFlag", "key": "rep.progress2", "amount": 5 }
         ],
         "complete": { "op": "flag", "key": "flag.tolya_ishod", "eq": "ostavil" }
       },
@@ -224,7 +224,7 @@
         "descKey": "quest.tolya_chto_dalshe.stage.prinyal_kontrabandu",
         "onEnter": [
           { "op": "setFlag", "key": "flag.tolya_ishod", "value": "prinyal_kontrabandu" },
-          { "op": "setFlag", "key": "rep.progress2", "value": -10 }
+          { "op": "incrementFlag", "key": "rep.progress2", "amount": -10 }
         ],
         "complete": { "op": "flag", "key": "flag.tolya_ishod", "eq": "prinyal_kontrabandu" }
       },
@@ -233,7 +233,7 @@
         "descKey": "quest.tolya_chto_dalshe.stage.otkazal_kontrabandu",
         "onEnter": [
           { "op": "setFlag", "key": "flag.tolya_ishod", "value": "otkazal_kontrabandu" },
-          { "op": "setFlag", "key": "rep.progress2", "value": 5 }
+          { "op": "incrementFlag", "key": "rep.progress2", "amount": 5 }
         ],
         "complete": { "op": "flag", "key": "flag.tolya_ishod", "eq": "otkazal_kontrabandu" }
       },
@@ -274,7 +274,7 @@
         "descKey": "quest.schetchik_i_sovest.stage.pomog",
         "onEnter": [
           { "op": "setFlag", "key": "flag.schetchik_sovest", "value": "pomog" },
-          { "op": "setFlag", "key": "rep.energosbyt", "value": -10 },
+          { "op": "incrementFlag", "key": "rep.energosbyt", "amount": -10 },
           { "op": "giveItem", "item": "item.cons_bint", "count": 2 }
         ],
         "complete": { "op": "flag", "key": "flag.schetchik_sovest", "eq": "pomog" }
@@ -284,7 +284,7 @@
         "descKey": "quest.schetchik_i_sovest.stage.otkazal",
         "onEnter": [
           { "op": "setFlag", "key": "flag.schetchik_sovest", "value": "otkazal" },
-          { "op": "setFlag", "key": "rep.energosbyt", "value": 10 }
+          { "op": "incrementFlag", "key": "rep.energosbyt", "amount": 10 }
         ],
         "complete": { "op": "flag", "key": "flag.schetchik_sovest", "eq": "otkazal" }
       },

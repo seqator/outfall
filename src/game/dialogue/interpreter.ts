@@ -175,6 +175,11 @@ export function applyEffect(state: GameState, effect: Effect): GameState {
   switch (effect.op) {
     case 'setFlag':
       return { ...state, flags: { ...state.flags, [effect.key]: effect.value } };
+    case 'incrementFlag': {
+      const current = state.flags[effect.key];
+      const base = typeof current === 'number' ? current : 0;
+      return { ...state, flags: { ...state.flags, [effect.key]: base + effect.amount } };
+    }
     case 'giveItem':
       return { ...state, inventory: state.inventory.giveItem(effect.item, effect.count) };
     case 'startQuest':

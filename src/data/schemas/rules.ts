@@ -58,6 +58,17 @@ export const EffectSchema = z.union([
     count: z.number().int().positive().default(1),
   }),
   z.object({ op: z.literal('setFlag'), key: z.string().min(1), value: FlagValueSchema }),
+  /**
+   * Прибавляет `amount` (может быть отрицательным) к текущему числовому
+   * значению флага (0, если флага ещё не было или он не число) — в отличие
+   * от `setFlag`, не перезаписывает флаг целиком. Нужен для счётчиков,
+   * которые меняются несколькими независимыми эффектами за игру, а не
+   * задаются один раз (репутация фракций `rep.*`, `docs/narrative/
+   * main-quest.md` §0.1 — три квеста Акта 1 независимо трогают один и тот
+   * же `rep.progress2`; `setFlag` стирал бы предыдущий вклад вместо
+   * накопления).
+   */
+  z.object({ op: z.literal('incrementFlag'), key: z.string().min(1), amount: z.number() }),
   z.object({ op: z.literal('startQuest'), quest: namespacedId('quest') }),
   z.object({ op: z.literal('damage'), amount: z.number().positive() }),
   z.object({ op: z.literal('xp'), amount: z.number().positive() }),
