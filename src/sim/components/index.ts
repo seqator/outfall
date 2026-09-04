@@ -73,6 +73,110 @@ export interface MapGridComponent {
   collision: Uint8Array;
 }
 
+/**
+ * OF-016: бой (`docs/design/combat.md`) — здоровье/броня, боевые
+ * характеристики героя, оружие с расходуемым состоянием, снаряды, i-frames
+ * рывка, шок, обездвиживание (сеть Подлинейного) и состояние ИИ врага.
+ * Статические данные (таблицы урона/оружия/врагов) живут в
+ * `sim/formulas/weapons.ts`/`enemies.ts` — здесь только форма изменяемого
+ * состояния сущности за тик.
+ */
+
+import type { EntityId } from '../../core/world';
+import type { EnemyDefId } from '../formulas/enemies';
+import type { WeaponId } from '../formulas/weapons';
+
+/** Здоровье/броня — общий компонент для героя и врагов (§4.1 combat.md). */
+export interface HealthComponent {
+  hp: number;
+  maxHp: number;
+  armor: number;
+}
+
+/** Боевые навыки героя (0–100) для формулы урона/разброса (§4.1/§4.3); враги используют `EnemyDef.skill`, не этот компонент. */
+export interface CombatSkillsComponent {
+  guns: number;
+  heavy: number;
+  fists: number;
+}
+
+/** КОСТЯК-параметры героя, влияющие на бой: Кураж — крит (§4.2), Острота — рывок (§4.4). 1–10. */
+export interface AttributesComponent {
+  courage: number;
+  reflex: number;
+}
+
+/** Направление «взгляда» сущности — прицеливание оружия дальнего боя и удар в спину (не используется в срезе, задел под нож «Стропорез»). */
+export interface FacingComponent {
+  dirX: number;
+  dirY: number;
+}
+
+/** Расходуемое состояние одного оружия — патроны/перезарядка/КД/комбо (для «Крана»). */
+export interface WeaponRuntimeState {
+  /** Патронов в магазине; 0 у оружия без патронов (Кулаки) — не расходуется. */
+  ammo: number;
+  cooldownMs: number;
+  reloadRemainingMs: number;
+  /** Счётчик ударов подряд по одной цели — только «Кран» (§3.1: каждый 3-й оглушает). */
+  comboHits: number;
+  comboTargetId: EntityId | null;
+}
+
+/** Экипированное оружие героя + независимое расходуемое состояние каждого оружия среза (переключение slot1/2/3 не сбрасывает патроны другого оружия). */
+export interface WeaponsComponent {
+  equipped: WeaponId;
+  states: Record<WeaponId, WeaponRuntimeState>;
+}
+
+/** Снаряд (пуля/дробь): прямолинейное движение, урон при попадании — порождается `combatSystem` при выстреле из оружия ветки «Стволы»/«Тяжёлое». */
+export interface ProjectileComponent {
+  ownerId: EntityId;
+  dirX: number;
+  dirY: number;
+  /** Тайлов/сек. */
+  speed: number;
+  baseDamage: number;
+  weaponId: WeaponId;
+  /** Навык стрелка на момент выстрела — крит и разброс уже применены при спавне снаряда, а падение урона с дистанцией (§3.1 «Дупло») применяется на попадании. */
+  skill: number;
+  crit: 1 | 2;
+  traveled: number;
+  maxRangeM: number;
+}
+
+/** i-frames рывка (§4.4): пока `iframesRemainingMs > 0`, сущность неуязвима к урону. */
+export interface DashStateComponent {
+  iframesRemainingMs: number;
+  cooldownRemainingMs: number;
+}
+
+/** Шок (§4.6): фиксированная длительность 4 с, не стекается — см. `formulas/shock.ts`. */
+export interface ShockStateComponent {
+  remainingMs: number;
+}
+
+/** Обездвиживание («Бросок сети» Подлинейного, §2.2): запрещает движение и рывок. */
+export interface ImmobilizedComponent {
+  remainingMs: number;
+}
+
+/** Фазы конечного автомата ИИ врага (§1/§2 combat.md: телеграф всегда виден до урона). */
+export type AiPhase = 'idle' | 'chase' | 'telegraph' | 'attack' | 'cooldown';
+
+export interface AiStateComponent {
+  phase: AiPhase;
+  phaseElapsedMs: number;
+  targetId: EntityId | null;
+  /** > 0 — враг оглушён (напр. 3-м ударом «Крана», §3.1) и не продвигает свою фазу. */
+  stunnedMs: number;
+}
+
+/** Ссылка на статические данные врага (`ENEMY_DEFS`) — какая роль/атака/слабость у этой сущности. */
+export interface EnemyComponent {
+  defId: EnemyDefId;
+}
+
 declare module '../../core/world' {
   interface Components {
     transform: TransformComponent;
@@ -82,5 +186,16 @@ declare module '../../core/world' {
     collidable: CollidableComponent;
     spawnMarker: SpawnMarkerComponent;
     mapGrid: MapGridComponent;
+    health: HealthComponent;
+    combatSkills: CombatSkillsComponent;
+    attributes: AttributesComponent;
+    facing: FacingComponent;
+    weapons: WeaponsComponent;
+    projectile: ProjectileComponent;
+    dashState: DashStateComponent;
+    shockState: ShockStateComponent;
+    immobilized: ImmobilizedComponent;
+    aiState: AiStateComponent;
+    enemy: EnemyComponent;
   }
 }

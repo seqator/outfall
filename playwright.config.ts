@@ -4,7 +4,14 @@ const isCI = !!process.env['CI'];
 
 export default defineConfig({
   testDir: './tests/e2e',
-  fullyParallel: true,
+  // Один воркер: несколько headless-Chromium с программным WebGL (нет
+  // /dev/dri в песочнице/CI-контейнере) конкурируют за CPU и дают ложные
+  // FPS-просадки и «скриншот не устаканился» в scoreboard/stress-тестах —
+  // не баг игры, а артефакт параллельного запуска без GPU. На машине с
+  // настоящим GPU (разработка, стенд на выставке) это ограничение не нужно,
+  // но здесь параллелизм только вредит стабильности набора из 3 тестов.
+  fullyParallel: false,
+  workers: 1,
   forbidOnly: isCI,
   retries: isCI ? 1 : 0,
   reporter: isCI ? [['github'], ['html', { open: 'never' }]] : 'list',

@@ -51,6 +51,24 @@ function buildLayers(): GameMap['layers'] {
   return { ground, walls, collision };
 }
 
+/**
+ * OF-016: три спавна врагов среза (`docs/design/combat.md` §2.1–2.3), южнее
+ * перегородки — герой стартует в центре карты (проход x=31/32,y=32) и
+ * встречает их, идя на юг. Намеренно **не** на прямой y=32 (коридор, по
+ * которому `tests/e2e/hero-movement.spec.ts` гоняет героя строго на восток
+ * без единого шага в сторону): радиус агро (8 тайлов) + гистерезис погони
+ * (×1,5) от точки (x,54) до любой точки коридора (x,32) — не меньше 22
+ * тайлов, враги гарантированно не тронутся с места и не попадут в кадр,
+ * пока тот тест проверяет одну лишь коллизию о стену, без боя.
+ */
+function buildEnemySpawns(): GameMap['enemySpawns'] {
+  return [
+    { id: 'raki_1', enemyId: 'enemy.raki', position: { x: 16, y: 54 }, count: 1 },
+    { id: 'podlineiny_1', enemyId: 'enemy.podlineiny', position: { x: 48, y: 54 }, count: 1 },
+    { id: 'ohrana_1', enemyId: 'enemy.ohrana_progress2', position: { x: 32, y: 58 }, count: 1 },
+  ];
+}
+
 /** `GameMap` без прохода через zod (это код, не внешние данные) — форма гарантирована типом. */
 export function createDevTestMap(): GameMap {
   return {
@@ -61,7 +79,7 @@ export function createDevTestMap(): GameMap {
     tileset: 'dev',
     layers: buildLayers(),
     npcs: [],
-    enemySpawns: [],
+    enemySpawns: buildEnemySpawns(),
     itemPickups: [],
     triggers: [],
     exits: [],

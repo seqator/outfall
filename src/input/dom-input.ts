@@ -6,9 +6,15 @@
  *
  * WASD и стрелки — движение (`moveX`/`moveY`, нормализовано по диагонали,
  * уже в мировых осях: X — восток/запад, Y — юг/север). Остальные действия
- * (`Action`) мапятся на клавиши для будущих систем (бой — OF-016, инвентарь
- * — OF-017, пауза), хотя ни одна из них ещё не читает `pressed`/`held` —
- * это не в скоупе OF-015, но контракт `InputSnapshot` их требует.
+ * (`Action`) мапятся на клавиши/кнопку мыши.
+ *
+ * OF-016: `Mouse0` (ЛКМ → `attack`) уже был объявлен в `ACTION_KEYS`
+ * (задел OF-015), но ни разу не подключался к событию мыши — `heldKeys`
+ * заполнялась только из `keydown`/`keyup` (`KeyboardEvent.code`), поэтому
+ * стрельба мышью физически не работала. Добавлены `mousedown`/`mouseup`,
+ * кладущие/убирающие тот же синтетический код `'Mouse0'` в `heldKeys` —
+ * без этого «игрок стреляет (ЛКМ или attack)» из боевого среза было бы
+ * невозможно проверить руками.
  */
 
 import { EMPTY_INPUT, type Action, type InputSnapshot } from '../core/input';
@@ -69,6 +75,25 @@ export function createDomInputSource(target: EventTarget = window): DomInputHand
     aimWorld = { x: me.clientX, y: me.clientY };
   };
 
+  /** Синтетический «код» кнопки мыши — тот же приём, что `KeyboardEvent.code`, только для `ACTION_KEYS['Mouse0']`. */
+  const MOUSE_BUTTON_CODES: Record<number, string> = { 0: 'Mouse0' };
+
+  const handleMouseDown = (e: Event): void => {
+    const code = MOUSE_BUTTON_CODES[(e as MouseEvent).button];
+    if (!code) return;
+    if (!heldKeys.has(code)) {
+      const action = ACTION_KEYS[code];
+      if (action) justPressed.add(action);
+    }
+    heldKeys.add(code);
+  };
+
+  const handleMouseUp = (e: Event): void => {
+    const code = MOUSE_BUTTON_CODES[(e as MouseEvent).button];
+    if (!code) return;
+    heldKeys.delete(code);
+  };
+
   const handleBlur = (): void => {
     // Фокус ушёл со страницы — держащиеся клавиши больше не «зажаты»,
     // иначе герой продолжит бежать после Alt+Tab (keyup не долетит).
@@ -78,6 +103,8 @@ export function createDomInputSource(target: EventTarget = window): DomInputHand
   target.addEventListener('keydown', handleKeyDown);
   target.addEventListener('keyup', handleKeyUp);
   target.addEventListener('mousemove', handleMouseMove);
+  target.addEventListener('mousedown', handleMouseDown);
+  target.addEventListener('mouseup', handleMouseUp);
   window.addEventListener('blur', handleBlur);
 
   return {
@@ -111,6 +138,8 @@ export function createDomInputSource(target: EventTarget = window): DomInputHand
       target.removeEventListener('keydown', handleKeyDown);
       target.removeEventListener('keyup', handleKeyUp);
       target.removeEventListener('mousemove', handleMouseMove);
+      target.removeEventListener('mousedown', handleMouseDown);
+      target.removeEventListener('mouseup', handleMouseUp);
       window.removeEventListener('blur', handleBlur);
       heldKeys.clear();
       justPressed.clear();
