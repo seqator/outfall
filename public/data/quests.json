@@ -1,0 +1,305 @@
+[
+  {
+    "id": "quest.svoi_truby",
+    "titleKey": "quest.svoi_truby.title",
+    "stages": [
+      {
+        "id": "start",
+        "descKey": "quest.svoi_truby.stage.start",
+        "onEnter": [],
+        "complete": {
+          "op": "any",
+          "conditions": [
+            { "op": "flag", "key": "flag.otrabotka_tolya", "eq": "sdal" },
+            { "op": "flag", "key": "flag.otrabotka_tolya", "eq": "otkazal" }
+          ]
+        }
+      },
+      {
+        "id": "otrabotka_sdal",
+        "descKey": "quest.svoi_truby.stage.otrabotka_sdal",
+        "onEnter": [
+          { "op": "setFlag", "key": "rep.progress2", "value": 15 },
+          { "op": "giveItem", "item": "item.mat_detali", "count": 5 },
+          { "op": "xp", "amount": 50 }
+        ],
+        "complete": { "op": "flag", "key": "flag.otrabotka_tolya", "eq": "sdal" }
+      },
+      {
+        "id": "otrabotka_otkazal",
+        "descKey": "quest.svoi_truby.stage.otrabotka_otkazal",
+        "onEnter": [
+          { "op": "setFlag", "key": "rep.progress2", "value": -5 },
+          { "op": "xp", "amount": 50 }
+        ],
+        "complete": { "op": "flag", "key": "flag.otrabotka_tolya", "eq": "otkazal" }
+      },
+      {
+        "id": "remont_palycha",
+        "descKey": "quest.svoi_truby.stage.remont_palycha",
+        "onEnter": [
+          { "op": "setFlag", "key": "flag.q1_remont_hint", "value": true },
+          { "op": "xp", "amount": 30 }
+        ],
+        "complete": { "op": "skill", "skill": "remont", "gte": 6 }
+      },
+      {
+        "id": "done",
+        "descKey": "quest.svoi_truby.stage.done",
+        "onEnter": [
+          { "op": "setFlag", "key": "flag.q1_done", "value": true },
+          { "op": "xp", "amount": 100 }
+        ],
+        "complete": {
+          "op": "any",
+          "conditions": [
+            { "op": "flag", "key": "flag.otrabotka_tolya", "eq": "sdal" },
+            { "op": "flag", "key": "flag.otrabotka_tolya", "eq": "otkazal" }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "quest.klyuch_tarifnicy",
+    "titleKey": "quest.klyuch_tarifnicy.title",
+    "stages": [
+      {
+        "id": "start",
+        "descKey": "quest.klyuch_tarifnicy.stage.start",
+        "onEnter": [],
+        "complete": {
+          "op": "any",
+          "conditions": [
+            { "op": "flag", "key": "flag.prolog_vybor", "eq": "spas" },
+            { "op": "flag", "key": "flag.prolog_vybor", "eq": "klyuch" }
+          ]
+        }
+      },
+      {
+        "id": "rubilnik_otklyuchil",
+        "descKey": "quest.klyuch_tarifnicy.stage.rubilnik_otklyuchil",
+        "onEnter": [
+          { "op": "setFlag", "key": "flag.rubilnik", "value": "otklyuchil" },
+          { "op": "setFlag", "key": "rep.energosbyt", "value": 15 },
+          { "op": "setFlag", "key": "rep.progress2", "value": -10 }
+        ],
+        "complete": { "op": "flag", "key": "flag.rubilnik", "eq": "otklyuchil" }
+      },
+      {
+        "id": "rubilnik_otkazal",
+        "descKey": "quest.klyuch_tarifnicy.stage.rubilnik_otkazal",
+        "onEnter": [
+          { "op": "setFlag", "key": "flag.rubilnik", "value": "otkazal" },
+          { "op": "setFlag", "key": "rep.energosbyt", "value": -10 }
+        ],
+        "complete": { "op": "flag", "key": "flag.rubilnik", "eq": "otkazal" }
+      },
+      {
+        "id": "dlya_kolodtsa_privel",
+        "descKey": "quest.klyuch_tarifnicy.stage.dlya_kolodtsa_privel",
+        "onEnter": [
+          { "op": "setFlag", "key": "flag.dlya_kolodtsa", "value": "privel" },
+          { "op": "setFlag", "key": "rep.chistye", "value": 15 }
+        ],
+        "complete": { "op": "flag", "key": "flag.dlya_kolodtsa", "eq": "privel" }
+      },
+      {
+        "id": "dlya_kolodtsa_otkazal",
+        "descKey": "quest.klyuch_tarifnicy.stage.dlya_kolodtsa_otkazal",
+        "onEnter": [
+          { "op": "setFlag", "key": "flag.dlya_kolodtsa", "value": "otkazal" },
+          { "op": "setFlag", "key": "rep.chistye", "value": -10 }
+        ],
+        "complete": { "op": "flag", "key": "flag.dlya_kolodtsa", "eq": "otkazal" }
+      },
+      {
+        "id": "polchasa_pravda",
+        "descKey": "quest.klyuch_tarifnicy.stage.polchasa_pravda",
+        "onEnter": [{ "op": "setFlag", "key": "flag.palych_pravda", "value": true }],
+        "complete": { "op": "flag", "key": "flag.q1_done", "eq": true }
+      },
+      {
+        "id": "polchasa_ubil",
+        "descKey": "quest.klyuch_tarifnicy.stage.polchasa_ubil",
+        "onEnter": [
+          { "op": "setFlag", "key": "flag.palych_ubit", "value": true },
+          { "op": "setFlag", "key": "rep.progress2", "value": -100 }
+        ],
+        "complete": { "op": "flag", "key": "flag.palych_ubit", "eq": true }
+      },
+      {
+        "id": "polchasa_poshadil",
+        "descKey": "quest.klyuch_tarifnicy.stage.polchasa_poshadil",
+        "onEnter": [{ "op": "setFlag", "key": "flag.palych_ubit", "value": false }],
+        "complete": { "op": "flag", "key": "flag.palych_ubit", "eq": false }
+      },
+      {
+        "id": "done",
+        "descKey": "quest.klyuch_tarifnicy.stage.done",
+        "onEnter": [{ "op": "xp", "amount": 150 }],
+        "complete": { "op": "flag", "key": "flag.palych_pravda", "eq": true }
+      }
+    ]
+  },
+  {
+    "id": "quest.med_dlya_semyorki",
+    "titleKey": "quest.med_dlya_semyorki.title",
+    "stages": [
+      {
+        "id": "start",
+        "descKey": "quest.med_dlya_semyorki.stage.start",
+        "onEnter": [],
+        "complete": { "op": "questStage", "quest": "quest.svoi_truby", "stage": "done", "cmp": "atLeast" }
+      },
+      {
+        "id": "vymenyal",
+        "descKey": "quest.med_dlya_semyorki.stage.vymenyal",
+        "onEnter": [
+          { "op": "setFlag", "key": "flag.med_semyorki", "value": "vymenyal" },
+          { "op": "setFlag", "key": "rep.progress2", "value": 10 }
+        ],
+        "complete": { "op": "flag", "key": "flag.med_semyorki", "eq": "vymenyal" }
+      },
+      {
+        "id": "sorval",
+        "descKey": "quest.med_dlya_semyorki.stage.sorval",
+        "onEnter": [
+          { "op": "setFlag", "key": "flag.med_semyorki", "value": "sorval" },
+          { "op": "setFlag", "key": "rep.progress2", "value": 10 },
+          { "op": "setFlag", "key": "rep.energosbyt", "value": -15 }
+        ],
+        "complete": { "op": "flag", "key": "flag.med_semyorki", "eq": "sorval" }
+      },
+      {
+        "id": "done",
+        "descKey": "quest.med_dlya_semyorki.stage.done",
+        "onEnter": [{ "op": "xp", "amount": 80 }],
+        "complete": {
+          "op": "any",
+          "conditions": [
+            { "op": "flag", "key": "flag.med_semyorki", "eq": "vymenyal" },
+            { "op": "flag", "key": "flag.med_semyorki", "eq": "sorval" }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "quest.tolya_chto_dalshe",
+    "titleKey": "quest.tolya_chto_dalshe.title",
+    "stages": [
+      {
+        "id": "start",
+        "descKey": "quest.tolya_chto_dalshe.stage.start",
+        "onEnter": [],
+        "complete": {
+          "op": "any",
+          "conditions": [
+            { "op": "questStage", "quest": "quest.svoi_truby", "stage": "otrabotka_sdal", "cmp": "atLeast" },
+            { "op": "questStage", "quest": "quest.svoi_truby", "stage": "otrabotka_otkazal", "cmp": "atLeast" }
+          ]
+        }
+      },
+      {
+        "id": "oblegchil",
+        "descKey": "quest.tolya_chto_dalshe.stage.oblegchil",
+        "onEnter": [
+          { "op": "setFlag", "key": "flag.tolya_ishod", "value": "oblegchil" },
+          { "op": "setFlag", "key": "rep.progress2", "value": -5 }
+        ],
+        "complete": { "op": "flag", "key": "flag.tolya_ishod", "eq": "oblegchil" }
+      },
+      {
+        "id": "ostavil",
+        "descKey": "quest.tolya_chto_dalshe.stage.ostavil",
+        "onEnter": [
+          { "op": "setFlag", "key": "flag.tolya_ishod", "value": "ostavil" },
+          { "op": "setFlag", "key": "rep.progress2", "value": 5 }
+        ],
+        "complete": { "op": "flag", "key": "flag.tolya_ishod", "eq": "ostavil" }
+      },
+      {
+        "id": "prinyal_kontrabandu",
+        "descKey": "quest.tolya_chto_dalshe.stage.prinyal_kontrabandu",
+        "onEnter": [
+          { "op": "setFlag", "key": "flag.tolya_ishod", "value": "prinyal_kontrabandu" },
+          { "op": "setFlag", "key": "rep.progress2", "value": -10 }
+        ],
+        "complete": { "op": "flag", "key": "flag.tolya_ishod", "eq": "prinyal_kontrabandu" }
+      },
+      {
+        "id": "otkazal_kontrabandu",
+        "descKey": "quest.tolya_chto_dalshe.stage.otkazal_kontrabandu",
+        "onEnter": [
+          { "op": "setFlag", "key": "flag.tolya_ishod", "value": "otkazal_kontrabandu" },
+          { "op": "setFlag", "key": "rep.progress2", "value": 5 }
+        ],
+        "complete": { "op": "flag", "key": "flag.tolya_ishod", "eq": "otkazal_kontrabandu" }
+      },
+      {
+        "id": "done",
+        "descKey": "quest.tolya_chto_dalshe.stage.done",
+        "onEnter": [{ "op": "xp", "amount": 60 }],
+        "complete": {
+          "op": "any",
+          "conditions": [
+            { "op": "flag", "key": "flag.tolya_ishod", "eq": "oblegchil" },
+            { "op": "flag", "key": "flag.tolya_ishod", "eq": "ostavil" },
+            { "op": "flag", "key": "flag.tolya_ishod", "eq": "prinyal_kontrabandu" },
+            { "op": "flag", "key": "flag.tolya_ishod", "eq": "otkazal_kontrabandu" }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "quest.schetchik_i_sovest",
+    "titleKey": "quest.schetchik_i_sovest.title",
+    "stages": [
+      {
+        "id": "start",
+        "descKey": "quest.schetchik_i_sovest.stage.start",
+        "onEnter": [],
+        "complete": {
+          "op": "any",
+          "conditions": [
+            { "op": "questStage", "quest": "quest.klyuch_tarifnicy", "stage": "rubilnik_otklyuchil", "cmp": "atLeast" },
+            { "op": "questStage", "quest": "quest.klyuch_tarifnicy", "stage": "rubilnik_otkazal", "cmp": "atLeast" }
+          ]
+        }
+      },
+      {
+        "id": "pomog",
+        "descKey": "quest.schetchik_i_sovest.stage.pomog",
+        "onEnter": [
+          { "op": "setFlag", "key": "flag.schetchik_sovest", "value": "pomog" },
+          { "op": "setFlag", "key": "rep.energosbyt", "value": -10 },
+          { "op": "giveItem", "item": "item.cons_bint", "count": 2 }
+        ],
+        "complete": { "op": "flag", "key": "flag.schetchik_sovest", "eq": "pomog" }
+      },
+      {
+        "id": "otkazal",
+        "descKey": "quest.schetchik_i_sovest.stage.otkazal",
+        "onEnter": [
+          { "op": "setFlag", "key": "flag.schetchik_sovest", "value": "otkazal" },
+          { "op": "setFlag", "key": "rep.energosbyt", "value": 10 }
+        ],
+        "complete": { "op": "flag", "key": "flag.schetchik_sovest", "eq": "otkazal" }
+      },
+      {
+        "id": "done",
+        "descKey": "quest.schetchik_i_sovest.stage.done",
+        "onEnter": [{ "op": "xp", "amount": 60 }],
+        "complete": {
+          "op": "any",
+          "conditions": [
+            { "op": "flag", "key": "flag.schetchik_sovest", "eq": "pomog" },
+            { "op": "flag", "key": "flag.schetchik_sovest", "eq": "otkazal" }
+          ]
+        }
+      }
+    ]
+  }
+]

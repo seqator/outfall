@@ -17,5 +17,24 @@
       "ignoresArmor": false
     },
     "sliceReady": true
+  },
+  {
+    "id": "enemy.podlineiny",
+    "nameKey": "enemy.podlineiny.name",
+    "role": "controller",
+    "hp": 25,
+    "armor": 0,
+    "attack": {
+      "nameKey": "enemy.podlineiny.attack.name",
+      "telegraphMs": 350,
+      "damage": 5,
+      "cooldownMs": 2500
+    },
+    "weakness": {
+      "nameKey": "enemy.podlineiny.weakness.name",
+      "multiplier": 1.75,
+      "ignoresArmor": false
+    },
+    "sliceReady": true
   }
 ]

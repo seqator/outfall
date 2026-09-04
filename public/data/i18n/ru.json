@@ -1,8 +1,23 @@
 {
   "map.truba.name": "Труба",
+  "map.garazhi.name": "Гаражи",
+  "map.plotina.name": "Плотина",
+  "map.paneli.name": "Панели / Оголённая линия",
   "npc.sanitar.name": "Санитар",
   "npc.rodion.name": "Родион «Ключик» Углов",
   "npc.serega_sachok.name": "Серёга Сачок",
+  "npc.palych.name": "Виктор Павлович «Палыч»",
+  "npc.grinya.name": "Гриня (Григорий)",
+  "npc.pereskazchik.name": "Пересказчик",
+  "npc.dyadya_gena.name": "Дядя Гена",
+  "npc.tolya.name": "Дядя Толя",
+  "npc.zoya.name": "Зоя Ильинична «Тарифница»",
+  "npc.modest_busygin.name": "Модест Бусыгин",
+  "npc.klavdiya_busygina.name": "Клавдия Бусыгина",
+  "npc.batya_kot.name": "Батя Кот",
+  "npc.tetya_valya.name": "Тётя Валя",
+  "npc.timofey_rzhavyy.name": "Тимофей Ржавый",
+  "npc.emissary_chistyh.name": "Эмиссар Чистых",
   "narrator.name": "—",
 
   "item.pistol_ogryzok.name": "Пистолет «Огрызок»",
@@ -19,6 +34,9 @@
   "enemy.raki.name": "Раки",
   "enemy.raki.attack.name": "Хватка клешнёй",
   "enemy.raki.weakness.name": "Раскрытое брюшко",
+  "enemy.podlineiny.name": "Подлинейный",
+  "enemy.podlineiny.attack.name": "Бросок сети",
+  "enemy.podlineiny.weakness.name": "Голая голова",
 
   "dialog.prolog_smotritel.start": "Вода пошла — Плотина спускает сброс. Шевелись, не в первый раз ныряешь.",
   "dialog.prolog_smotritel.choice.yazyk": "Не учи учёного — я и без соплей разберусь.",
@@ -36,5 +54,43 @@
   "dialog.prolog_kruchok.title": "Глава 1. Труба.",
 
   "dialog.prolog_serega.start": "Э! Куда прёшь — тут не твоя охота. Крупных — на рынок, мелких — так, погонять для смеха.",
-  "dialog.prolog_serega.choice.ladno": "Ладно, не буду мешать бизнесу."
+  "dialog.prolog_serega.choice.ladno": "Ладно, не буду мешать бизнесу.",
+
+  "quest.svoi_truby.title": "Свои трубы",
+  "quest.svoi_truby.stage.start": "Гриня просит найти должника кооператива — Дядю Толю с Панелей — и решить, что с ним делать.",
+  "quest.svoi_truby.stage.otrabotka_sdal": "Толя на отработке. Кооператив доволен — тебе доверяют.",
+  "quest.svoi_truby.stage.otrabotka_otkazal": "Толю предупредил. Гриня недоволен, но долг теперь личный, не кооперативный.",
+  "quest.svoi_truby.stage.remont_palycha": "Помог Палычу в депо и заметил в старом наряде кое-что лишнее — про задвижку.",
+  "quest.svoi_truby.stage.done": "Место в Гаражах закреплено: трамвай №7 и рынок теперь твои — насовсем.",
+
+  "quest.klyuch_tarifnicy.title": "Ключ Тарифницы",
+  "quest.klyuch_tarifnicy.stage.start": "Дойти до Плотины и разобраться с Зоей Ильиничной — с ключом или без.",
+  "quest.klyuch_tarifnicy.stage.rubilnik_otklyuchil": "Отключил подъезд на Панелях по приказу Бусыгина. Свет потушен, тариф соблюдён.",
+  "quest.klyuch_tarifnicy.stage.rubilnik_otkazal": "Отказался трогать рубильник. Бусыгин сделал это сам — без тебя.",
+  "quest.klyuch_tarifnicy.stage.dlya_kolodtsa_privel": "Привёл Тимофея Ржавого к колодцам Чистых «на очищение».",
+  "quest.klyuch_tarifnicy.stage.dlya_kolodtsa_otkazal": "Предупредил Тимофея и не привёл его к Чистым.",
+  "quest.klyuch_tarifnicy.stage.polchasa_pravda": "Палыч сам всё рассказал: приказ открыть задвижку выполнил он. Заклинило. «Я кран».",
+  "quest.klyuch_tarifnicy.stage.polchasa_ubil": "Убил Палыча на месте. Гриня — новый председатель, а тебе в Гаражах больше не рады.",
+  "quest.klyuch_tarifnicy.stage.polchasa_poshadil": "Пощадил Палыча. Он остаётся председателем — но уже не тем, кем был.",
+  "quest.klyuch_tarifnicy.stage.done": "Плотина, Панели и Оголённая линия открыты. Первая половина правды известна.",
+
+  "quest.med_dlya_semyorki.title": "Медь для семёрки",
+  "quest.med_dlya_semyorki.stage.start": "Дядя Гена не починит трамвай №7 без медного провода — а его больше всего под Оголённой линией.",
+  "quest.med_dlya_semyorki.stage.vymenyal": "Выменял медь у Бати Кота честно — по совести подлинейных.",
+  "quest.med_dlya_semyorki.stage.sorval": "Срезал провода с рабочей линии сам, не спрашивая. Трамвай поехал быстрее, чем стоило.",
+  "quest.med_dlya_semyorki.stage.done": "Трамвай №7 снова на ходу — вопрос только, какой ценой.",
+
+  "quest.tolya_chto_dalshe.title": "Толя: что дальше",
+  "quest.tolya_chto_dalshe.stage.start": "Судьба Толи ещё не решена окончательно — что бы ты ни выбрал в Гаражах.",
+  "quest.tolya_chto_dalshe.stage.oblegchil": "Уговорил Гриню сократить срок отработки Толи. Кооперативу это не понравилось.",
+  "quest.tolya_chto_dalshe.stage.ostavil": "Не стал вмешиваться — отработка идёт по правилам кооператива.",
+  "quest.tolya_chto_dalshe.stage.prinyal_kontrabandu": "Толя, теперь свободный, предложил возить товар в обход тарифов кооператива. Согласился.",
+  "quest.tolya_chto_dalshe.stage.otkazal_kontrabandu": "Отказался от предложения Толи — с кооперативом честнее.",
+  "quest.tolya_chto_dalshe.stage.done": "С Толей всё решено — так или иначе.",
+
+  "quest.schetchik_i_sovest.title": "Счётчик и совесть",
+  "quest.schetchik_i_sovest.stage.start": "Клавдия Бусыгина ищет того, кто тайком поможет Панелям пережить отключение — в обход мужа.",
+  "quest.schetchik_i_sovest.stage.pomog": "Пронёс лекарства и одеяла в тёмные подъезды Панелей — Модест пока ничего не узнал.",
+  "quest.schetchik_i_sovest.stage.otkazal": "Отказался — Клавдия справится сама, а тариф есть тариф.",
+  "quest.schetchik_i_sovest.stage.done": "Клавдия больше не спрашивает — теперь она знает ответ заранее."
 }
