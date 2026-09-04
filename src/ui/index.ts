@@ -4,6 +4,7 @@
  * отображает то, что ему передаёт `game`.
  */
 
+export * from './arena-menu';
 export * from './dialogue';
 export * from './fps-overlay';
 export * from './inventory';

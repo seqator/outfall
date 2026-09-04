@@ -8,3 +8,4 @@ export * from './save-store';
 export * from './memory-storage';
 export * from './hero-save';
 export * from './inventory-save';
+export * from './arena-records';

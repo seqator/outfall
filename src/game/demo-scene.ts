@@ -62,7 +62,7 @@
  */
 
 import { createAudioEngine, type AudioEngine } from '../audio';
-import { createEventBus, createLoop, createSeededRng, createWorld } from '../core';
+import { createEventBus, createLoop, createSeededRng, createWorld, type InputSource } from '../core';
 import type { EntityId, World } from '../core/world';
 import {
   MapSchema,
@@ -82,6 +82,7 @@ import {
   createWeaponsComponent,
   spawnEnemy,
   type EnemyDefId,
+  type WeaponId,
 } from '../sim';
 import { createFpsOverlay } from '../ui';
 import { createBrowserRaf } from './browser-raf';
@@ -102,11 +103,21 @@ import {
   applyWeaponsSave,
   captureHeroSave,
   captureWeaponsSave,
+  createArenaRecordsStore,
   createSaveStore,
   CURRENT_SAVE_SCHEMA_VERSION,
   toInventoryState,
   type SaveState,
 } from './save';
+import {
+  applyArenaModifiersToInput,
+  ARENA_KNIVES_ONLY_WEAPON_ID,
+  ARENA_WAVE_COUNT,
+  formatArenaSurvival,
+  isArenaMapId,
+  selectWaveSpawns,
+  type ArenaModifierId,
+} from './world/arena';
 import { createDevTestMap } from './world/dev-fixtures';
 import { resolveEnding, type EndingResult } from './world/endings';
 import {
@@ -153,6 +164,26 @@ declare global {
       getFlag(key: string): boolean | number | string | undefined;
       /** Id текущей загруженной карты (`GameMap.id`, напр. `map.garazhi`) — для e2e-теста перехода между картами (`tests/e2e/act1-transition.spec.ts`, OF-051), подтверждает `switchMap` без парсинга HUD/скриншота. */
       getMapId(): string;
+      /**
+       * Состояние текущего забега Арены (OF-039) — `null` вне карты Арены.
+       * `wavesCleared` — число полностью зачищенных волн, `wave` — номер
+       * текущей/незачищенной волны. Для `tests/e2e/arena.spec.ts`, чтобы не
+       * парсить HUD-строку.
+       */
+      getArenaState(): { wave: number; wavesCleared: number; finished: boolean } | null;
+      /**
+       * Мгновенно убивает всех живых врагов (`hp = 0`, обычная уборка трупов
+       * `combatSystem` делает остальное на следующем тике) — тестовый хук
+       * для `tests/e2e/arena.spec.ts`, чтобы проверить смену волн без
+       * реального боя (симметрично `teleportHero` выше — тот же принцип
+       * «не тянуть тестовую логику в прод», ничего игрового не меняет).
+       */
+      killAllEnemies(): void;
+      /** Рекорд карты×модификаторов из `localStorage` (`game/save/arena-records.ts`) — для e2e-теста «рекорд переживает перезагрузку». `undefined`, если забегов ещё не было. */
+      getArenaRecord(
+        mapId: string,
+        modifierIds: readonly string[],
+      ): { bestWavesCleared: number; bestSurvivalMs: number } | undefined;
     };
   }
 }
@@ -195,9 +226,17 @@ const SPAWNABLE_ENEMY_DEF_IDS: ReadonlySet<EnemyDefId> = new Set<EnemyDefId>([
   'enemy.boss_zadvizhka',
 ]);
 
-function attachCombatComponents(world: World, hero: EntityId): void {
+/**
+ * `initialWeapon` — OF-039, модификатор Арены «только ножи»: герой стартует
+ * забег уже с экипированным «Краном» (`ARENA_KNIVES_ONLY_WEAPON_ID`), а не
+ * с дефолтным пистолетом — переключение на стволы дальше заблокировано
+ * фильтром ввода (`applyArenaModifiersToInput`, `world/arena.ts`), но
+ * стартовое оружие фильтр не трогает (он видит только `pressed`/`held`
+ * тика, не начальное состояние `weapons`-компонента).
+ */
+function attachCombatComponents(world: World, hero: EntityId, initialWeapon?: WeaponId): void {
   world.store('health').add(hero, { hp: PLAYER_MAX_HP, maxHp: PLAYER_MAX_HP, armor: 0 });
-  world.store('weapons').add(hero, createWeaponsComponent());
+  world.store('weapons').add(hero, createWeaponsComponent(initialWeapon));
   world.store('facing').add(hero, { dirX: 1, dirY: 0 });
   world
     .store('attributes')
@@ -555,9 +594,44 @@ const FINAL_VALVE_OUTCOME_MESSAGE_MS = 4_000;
 /** Порог `Смекалка`, при котором в UI сцены видна (и физически доступна) опция `G` — единственный способ показать игроку скрытую концовку, не отдельный секретный триггер (`act2-act3.md` §4.1). */
 const FINAL_VALVE_SMEKALKA_THRESHOLD = 3;
 
+/**
+ * OF-039 («Арена», см. блок «Арена» ниже): пауза между зачисткой волны N и
+ * спавном волны N+1 — HUD-сигнал «волна пройдена», игрок физически успевает
+ * перевести дух/подобрать лут перед следующей волной (задача просит именно
+ * «спавн следующей волны — с паузой/сигналом»).
+ */
+const ARENA_INTERMISSION_MS = 3_000;
+
+export interface DemoSceneOptions {
+  /**
+   * Переопределяет `?map=` из URL — единственный способ Арены (кнопка на
+   * титульнике → `src/ui/arena-menu.ts` → `main.ts`) попасть на конкретную
+   * карту без перезагрузки страницы/навигации по адресной строке.
+   * `resolveInitialMapId()` (URL) остаётся рабочим путём для прямого захода
+   * `?map=arena_1` — оба пути (меню и URL) ведут в один и тот же волновой
+   * раннер ниже, различается только источник `mapId`.
+   */
+  readonly initialMapId?: string;
+  /** Активные модификаторы забега Арены (`world/arena.ts`) — `[]`, если сцена не запускалась через меню Арены (прямой `?map=arena_N`) или на не-арена карте (не читается вовсе). */
+  readonly arenaModifiers?: readonly ArenaModifierId[];
+  /**
+   * OF-039 §5 («выход из Арены без перезагрузки страницы»): по `Escape`,
+   * пока загружена карта Арены, сцена уничтожает саму себя и зовёт этот
+   * колбэк — `main.ts` показывает заново титульник/меню Арены. Честно
+   * упрощённая версия «выхода в меню»: работает только на картах Арены (не
+   * общий пауза-выход из кампании — такой механики в игре нет и вне скоупа
+   * этой задачи), не сохраняет прогресс кампании (Арена и так не пишет
+   * `SaveState`). Без колбэка (обычный вход через титульник «ПОГНАЛИ» или
+   * прямой `?map=`) `Escape` ничего не делает — поведение остального игрового
+   * процесса не меняется.
+   */
+  readonly onExitToMenu?: () => void;
+}
+
 export async function createDemoScene(
   root: HTMLElement,
   canvas: HTMLCanvasElement,
+  options: DemoSceneOptions = {},
 ): Promise<DemoScene> {
   const renderer = new PixiRenderer();
   await renderer.init(canvas, {
@@ -581,7 +655,10 @@ export async function createDemoScene(
   // `let`, не `const`: OF-051 переключает карту рантаймом (`switchMap` ниже,
   // по `exits[]`), поэтому `map`/`loadedMap` — держатели текущей загруженной
   // локации, не разовое значение на всю жизнь сцены.
-  let map = devRoom ? createDevTestMap() : await loadMapById(resolveInitialMapId());
+  const arenaModifiers: readonly ArenaModifierId[] = options.arenaModifiers ?? [];
+  let map = devRoom
+    ? createDevTestMap()
+    : await loadMapById(options.initialMapId ?? resolveInitialMapId());
   let loadedMap = loadMapIntoWorld(world, map);
   renderer.setMap(toRendererMapData(map));
 
@@ -629,7 +706,11 @@ export async function createDemoScene(
   // самое поле, что читает автовозрождение на смерть ниже.
   let spawn: Vector2 = devRoom ? findSpawnPoint(map) : map.id === 'map.truba' ? TRUBA_START_POINT : findSpawnPoint(map);
   const hero = createHero(world, spawn);
-  attachCombatComponents(world, hero);
+  attachCombatComponents(
+    world,
+    hero,
+    arenaModifiers.includes('arena.mod.knives_only') ? ARENA_KNIVES_ONLY_WEAPON_ID : undefined,
+  );
 
   // Стартовые расходники в вещмешке (`items-economy.md` §4) — иначе экран
   // инвентаря открывается пустым, что выглядит как ещё один недостижимый
@@ -655,7 +736,12 @@ export async function createDemoScene(
   // размечают собственных сценарных триггеров-волн, как «Труба» — ДОПУЩЕНИЕ
   // OF-051: без выделенного триггера спавн на этих картах происходит сразу
   // по загрузке, тем же путём, что и dev-room.
-  if (devRoom || map.id !== 'map.truba') {
+  //
+  // Карты Арены (OF-039, `isArenaMapId`) — исключение из этого допущения:
+  // `map.enemySpawns` там читает не «спавни всё сразу», а собственный
+  // волновой раннер (см. блок «Арена» ниже, `startArenaRun`) — иначе первая
+  // же загрузка карты Арены выпустила бы все 10 волн одним залпом.
+  if ((devRoom || map.id !== 'map.truba') && !isArenaMapId(map.id)) {
     spawnEnemiesFromMarkers(world, loadedMap.enemySpawnEntities);
   }
 
@@ -1206,10 +1292,35 @@ export async function createDemoScene(
   };
   window.addEventListener('keydown', handleSaveLoadKey);
 
+  // OF-039 §5 («выход из Арены без перезагрузки страницы»): `Escape`, пока
+  // загружена карта Арены и вызывающая сторона передала `onExitToMenu`
+  // (сцена, запущенная через меню «АРЕНА» на титульнике — `main.ts`),
+  // уничтожает саму себя и возвращает игрока в меню. См. докстринг
+  // `DemoSceneOptions.onExitToMenu` — сознательно упрощённая версия: не
+  // общий пауза-выход из кампании (такой механики нет и не заводится этой
+  // задачей), работает только на картах Арены.
+  const handleExitToMenuKey = (e: KeyboardEvent): void => {
+    if (e.code !== 'Escape') return;
+    if (!options.onExitToMenu || !isArenaMapId(map.id)) return;
+    e.preventDefault();
+    options.onExitToMenu();
+  };
+  window.addEventListener('keydown', handleExitToMenuKey);
+
   const simulation = createSimulation(world);
   const input: DomInputHandle = createDomInputSource(window);
   const raf = createBrowserRaf();
-  const loop = createLoop(simulation, input.source, raf);
+  // Модификаторы Арены (OF-039, «без рывка»/«только ножи») — чистая
+  // трансформация снимка ввода ДО того, как он доходит до `sim.step()`;
+  // `sim` не знает о существовании Арены (`world/arena.ts`, докстринг
+  // `applyArenaModifiersToInput`). Без активных модификаторов (обычная
+  // кампания, либо Арена без выбранных модификаторов) — тот же самый
+  // `input.source`, ни одной лишней аллокации на тик.
+  const simulationInput: InputSource =
+    arenaModifiers.length > 0
+      ? { snapshot: () => applyArenaModifiersToInput(input.source.snapshot(), arenaModifiers) }
+      : input.source;
+  const loop = createLoop(simulation, simulationInput, raf);
 
   // Панорама (концепт §6, 3–8 сек): камера стоит на `P` и не следует за
   // героем первые `PANORAMA_DURATION_MS` — установочный план перед тем, как
@@ -1254,6 +1365,109 @@ export async function createDemoScene(
   let suppressedExitPosition: Vector2 | null = null;
 
   const fpsOverlay = createFpsOverlay(root);
+
+  // -------------------------------------------------------------------
+  // Арена (OF-039): волновой раннер поверх `map.arena_1/2/3`
+  // (`docs/levels/08-arena.md`) — активен, только пока загружена карта
+  // Арены (`isArenaMapId(map.id)`), независимо от того, как игрок туда
+  // попал (меню `main.ts` с `options.arenaModifiers`, или прямой
+  // отладочный `?map=arena_1` — тогда модификаторы пусты). Волновая кривая
+  // (какие точки `enemySpawns[]` брать на волну N) — чистая функция
+  // `selectWaveSpawns` (`world/arena.ts`); здесь только оркестрация живого
+  // мира: спавн выбранных точек, детект «волна зачищена» (`enemy`-запрос
+  // пуст), пауза перед следующей волной, фиксация рекорда на завершении
+  // забега (смерть/выход через `exit`/победа на волне 10 — `finishArenaRun`,
+  // идемпотентно через `arenaRunFinished`, чтобы забег не засчитался
+  // дважды, если оба триггера сработают один за другим).
+  const arenaRecordsStore = createArenaRecordsStore(window.localStorage);
+  let arenaWave = 0;
+  let arenaWavesCleared = 0;
+  let arenaRunFinished = false;
+  let arenaIntermissionUntilMs: number | null = null;
+  let arenaOutcomeMessage: string | null = null;
+  let arenaStartMs = 0;
+
+  function spawnArenaWave(wave: number): void {
+    for (const point of selectWaveSpawns(map.enemySpawns, wave)) {
+      if (!SPAWNABLE_ENEMY_DEF_IDS.has(point.enemyId as EnemyDefId)) continue;
+      spawnEnemy(world, point.enemyId as EnemyDefId, point.position);
+    }
+  }
+
+  function startArenaRun(now: number): void {
+    arenaWave = 1;
+    arenaWavesCleared = 0;
+    arenaRunFinished = false;
+    arenaOutcomeMessage = null;
+    arenaIntermissionUntilMs = null;
+    arenaStartMs = now;
+    spawnArenaWave(arenaWave);
+  }
+
+  /**
+   * `reason`: `'death'` — герой погиб посреди волны; `'left'` — вышел через
+   * `exit` карты, не закончив забег; `'victory'` — зачистил волну 10.
+   * Идемпотентно (`arenaRunFinished`-гвард, тот же приём, что
+   * `resolveRodionOutcome`/`resolveFinalValveOutcome` выше) — рекорд не
+   * перезаписывается повторно, если, например, смерть и последующий выход
+   * через `exit` сработают в один и тот же уже завершённый забег.
+   */
+  function finishArenaRun(reason: 'death' | 'left' | 'victory', now: number): void {
+    if (arenaRunFinished) return;
+    arenaRunFinished = true;
+    arenaIntermissionUntilMs = null;
+    const survivalMs = Math.max(0, now - arenaStartMs);
+    const record = arenaRecordsStore.recordRun({
+      mapId: map.id,
+      modifiers: arenaModifiers,
+      wavesCleared: arenaWavesCleared,
+      survivalMs,
+    });
+    const survivalLabel = formatArenaSurvival(survivalMs);
+    const recordLabel = `рекорд карты: волна ${record.bestWavesCleared}/${ARENA_WAVE_COUNT}, ${formatArenaSurvival(record.bestSurvivalMs)}`;
+    arenaOutcomeMessage =
+      reason === 'victory'
+        ? `АРЕНА ПРОЙДЕНА — все ${ARENA_WAVE_COUNT} волн позади за ${survivalLabel}. ${recordLabel}.`
+        : reason === 'death'
+          ? `Пал на волне ${arenaWave}. Волн зачищено: ${arenaWavesCleared}, время — ${survivalLabel}. ${recordLabel}.`
+          : `Забег прерван. Волн зачищено: ${arenaWavesCleared}, время — ${survivalLabel}. ${recordLabel}.`;
+  }
+
+  /** Раз в кадр, пока карта — Арена и забег не завершён: пауза между волнами → спавн следующей; иначе — детект «все враги текущей волны мертвы» → пауза (или финал на волне 10). */
+  function updateArenaRun(now: number): void {
+    if (arenaIntermissionUntilMs !== null) {
+      if (now < arenaIntermissionUntilMs) return;
+      arenaIntermissionUntilMs = null;
+      arenaWave += 1;
+      spawnArenaWave(arenaWave);
+      return;
+    }
+    let hasAliveEnemy = false;
+    for (const _entity of world.query('enemy')) {
+      hasAliveEnemy = true;
+      break;
+    }
+    if (hasAliveEnemy) return;
+    arenaWavesCleared = arenaWave;
+    if (arenaWave >= ARENA_WAVE_COUNT) {
+      finishArenaRun('victory', now);
+      return;
+    }
+    arenaIntermissionUntilMs = now + ARENA_INTERMISSION_MS;
+  }
+
+  /** HUD-строка Арены — `null` вне карты Арены (обычный HUD кампании остаётся нетронутым). */
+  function computeArenaHud(now: number): string | null {
+    if (!isArenaMapId(map.id)) return null;
+    if (arenaOutcomeMessage !== null) return arenaOutcomeMessage;
+    if (arenaIntermissionUntilMs !== null) {
+      const remainSec = Math.max(0, Math.ceil((arenaIntermissionUntilMs - now) / 1000));
+      return `Волна ${arenaWave} зачищена. Следующая через ${remainSec}с…`;
+    }
+    return `Арена: волна ${arenaWave}/${ARENA_WAVE_COUNT}`;
+  }
+
+  if (isArenaMapId(map.id)) startArenaRun(performance.now());
 
   /** Ищет `exit` текущей карты в радиусе героя (`EXIT_RADIUS`) — раз в кадр, тем же приёмом, что и триггеры ниже. */
   function findNearbyExit(heroX: number, heroY: number): MapExit | null {
@@ -1301,6 +1515,15 @@ export async function createDemoScene(
       if (nextMap.id === 'map.truba' && !nextHookDialog) nextHookDialog = await loadDialog('prolog-kruchok');
       await loadDialogsForMap(nextMap, dialogsByNpcId);
 
+      // Арена (OF-039): выход через `exit` карты Арены до победы на волне 10
+      // — забег засчитывается как прерванный («left»), с тем прогрессом
+      // волн, что уже был зачищен (см. докстринг `finishArenaRun`). Не
+      // встречается в графе кампании сегодня (`exits[]` карт Арены ведут
+      // только на `map.garazhi`, `08-arena.md` §0.3, обратного ребра нет) —
+      // защита на будущее/дебаг-переходы, не мёртвый код: без неё выход из
+      // Арены посреди волны молча терял бы прогресс забега.
+      if (isArenaMapId(map.id) && !arenaRunFinished) finishArenaRun('left', performance.now());
+
       for (const entity of loadedMap.wallEntities) world.destroy(entity);
       for (const entity of loadedMap.npcEntities) world.destroy(entity);
       for (const entity of loadedMap.enemySpawnEntities) world.destroy(entity);
@@ -1316,7 +1539,12 @@ export async function createDemoScene(
       triggerRunner = createTriggerRunner(map);
       // См. ДОПУЩЕНИЕ у начального спавна dev-room/Акта 1 выше: без
       // сценарной волны (как T3 на «Трубе») спавним по факту загрузки карты.
-      if (map.id !== 'map.truba') spawnEnemiesFromMarkers(world, loadedMap.enemySpawnEntities);
+      // Карта Арены — свой волновой раннер (`startArenaRun` ниже), не общий
+      // «спавни всё сразу».
+      if (map.id !== 'map.truba' && !isArenaMapId(map.id)) {
+        spawnEnemiesFromMarkers(world, loadedMap.enemySpawnEntities);
+      }
+      if (isArenaMapId(map.id)) startArenaRun(performance.now());
 
       spawn = resolveEntryPoint(map, exit, fromMapId);
       const heroTransform = world.store('transform').get(hero);
@@ -1426,6 +1654,9 @@ export async function createDemoScene(
         if (finalValveSceneActive && !finalValveResolved) {
           updateFinalValveScene(now, frameDtMs);
         }
+        if (isArenaMapId(map.id) && !arenaRunFinished) {
+          updateArenaRun(now);
+        }
         // §11.5 п.2 карты (форс-развязка при входе в T5 без разрешённой сцены)
         // сознательно не реализован буквально: `trigger_t5` стоит в (30,54) с
         // радиусом 3, а Родион — в (30,52), то есть его собственная точка уже
@@ -1450,6 +1681,13 @@ export async function createDemoScene(
     if (health) {
       if (health.hp <= 0 && heroDeadSinceMs === null) {
         heroDeadSinceMs = now;
+        // Арена (OF-039): смерть посреди забега заканчивает его — рекорд
+        // фиксируется по волнам, зачищенным ДО смерти (`arenaWavesCleared`,
+        // обновляется только в `updateArenaRun` на полностью зачищенной
+        // волне). Автовозрождение ниже всё равно происходит (тот же путь,
+        // что и в кампании) — герой не застревает трупом, но новые волны
+        // Арены больше не спавнятся (`arenaRunFinished`-гвард в `onFrame`).
+        if (isArenaMapId(map.id) && !arenaRunFinished) finishArenaRun('death', now);
       } else if (health.hp <= 0 && heroDeadSinceMs !== null && now - heroDeadSinceMs >= RESPAWN_DELAY_MS) {
         health.hp = health.maxHp;
         const transform = world.store('transform').get(hero);
@@ -1496,6 +1734,8 @@ export async function createDemoScene(
     if (rodionHud !== null) hud = rodionHud + ' | ' + hud;
     const finalValveHud = computeFinalValveHud(now);
     if (finalValveHud !== null) hud = finalValveHud + ' | ' + hud;
+    const arenaHud = computeArenaHud(now);
+    if (arenaHud !== null) hud = arenaHud + ' | ' + hud;
     if (heroDeadSinceMs !== null) hud = 'ВЫ ПОГИБЛИ… возрождение | ' + hud;
     if (hintUntilMs !== null && performance.now() < hintUntilMs) {
       hud = 'WASD — идти, ЛКМ — стрелять, E — говорить, I — инвентарь | ' + hud;
@@ -1554,6 +1794,22 @@ export async function createDemoScene(
     getMapId(): string {
       return map.id;
     },
+    getArenaState(): { wave: number; wavesCleared: number; finished: boolean } | null {
+      if (!isArenaMapId(map.id)) return null;
+      return { wave: arenaWave, wavesCleared: arenaWavesCleared, finished: arenaRunFinished };
+    },
+    killAllEnemies(): void {
+      for (const entity of world.query('enemy', 'health')) {
+        const health = world.store('health').get(entity);
+        if (health) health.hp = 0;
+      }
+    },
+    getArenaRecord(
+      mapId: string,
+      modifierIds: readonly string[],
+    ): { bestWavesCleared: number; bestSurvivalMs: number } | undefined {
+      return arenaRecordsStore.getRecord(mapId, modifierIds as ArenaModifierId[]);
+    },
   };
 
   return {
@@ -1561,6 +1817,7 @@ export async function createDemoScene(
       loop.stop();
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('keydown', handleSaveLoadKey);
+      window.removeEventListener('keydown', handleExitToMenuKey);
       window.removeEventListener('keydown', handleInventoryKey);
       window.removeEventListener('keydown', handleRodionKeyDown);
       window.removeEventListener('keyup', handleRodionKeyUp);

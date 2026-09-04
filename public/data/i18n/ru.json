@@ -38,6 +38,8 @@
 
   "item.pistol_ogryzok.name": "Пистолет «Огрызок»",
   "item.pistol_ogryzok.desc": "Лёгкий самодельный пистолет под 9 мм — первое оружие трубочиста.",
+  "item.shotgun_duplo.name": "Обрез «Дупло»",
+  "item.wrench_kran.name": "Гаечный ключ «Кран»",
   "item.ammo_pistol.name": "Патроны 9 мм",
   "item.ammo_pistol.desc": "Стандартный боеприпас «Огрызка».",
   "item.cons_bint.name": "Аптечка «Бинт»",
