@@ -4327,6 +4327,22 @@
       ]
     },
     {
+      "id": "trigger_final_valve",
+      "position": {
+        "x": 21,
+        "y": 5
+      },
+      "radius": 3,
+      "once": true,
+      "effects": [
+        {
+          "op": "setFlag",
+          "key": "flag.truba_final.valve_scene_started",
+          "value": true
+        }
+      ]
+    },
+    {
       "id": "trigger_naryad_knizhka_final",
       "position": {
         "x": 5,

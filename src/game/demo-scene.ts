@@ -532,6 +532,28 @@ const RODION_RELEASE_MESSAGE_MS = 1_000;
 /** Как долго после исхода (`spas`/`klyuch`/таймаут) держать финальную строку на HUD. */
 const RODION_OUTCOME_MESSAGE_MS = 4_000;
 
+/**
+ * Числа финальной сцены задвижки (`map.truba_final`, `trigger_final_valve`)
+ * — из `docs/narrative/quests/act2-act3.md` §4.1/§4.2 (narrative-writer,
+ * по образцу сцены Родиона выше — единственная сцена волны Актов 2-3,
+ * объявленная сюжетно срочной, поэтому реалтайм-оверлей, а не диалог).
+ */
+const FINAL_VALVE_POSITION: Vector2 = { x: 21, y: 5 };
+/** Радиус, в котором держатся `E`/`F`/`G` — тот же принцип, что `INTERACT_RADIUS`, но своя константа: это не NPC-интеракция, а точка на карте. */
+const FINAL_VALVE_RADIUS = 3;
+/** `T_scene` — общий таймер сцены от момента `trigger_final_valve`. Крупнее, чем у Родиона (18 не 15 с) — до трёх клавиш действия вместо двух, финал игры, после сцены больше нет сюжета. */
+const FINAL_VALVE_SCENE_DURATION_MS = 18_000;
+/** `T_hold` — сколько секунд подряд держать `E`, чтобы исполнить решение (ветка зависит от `flag.storona`). */
+const FINAL_VALVE_HOLD_THRESHOLD_SEC = 7;
+/** `T_snap` — «довести дозирующий вентиль до метки» (`F`, только `flag.storona === 'energosbyt'`). */
+const FINAL_VALVE_SNAP_DURATION_MS = 2_000;
+/** `T_drink` — «выпить пузырёк со штаммом-0» (`G`, скрытая опция, только `Смекалка ≤ 3`, §5.5 концовки «Очень чистый»). */
+const FINAL_VALVE_DRINK_DURATION_MS = 3_000;
+const FINAL_VALVE_RELEASE_MESSAGE_MS = 1_000;
+const FINAL_VALVE_OUTCOME_MESSAGE_MS = 4_000;
+/** Порог `Смекалка`, при котором в UI сцены видна (и физически доступна) опция `G` — единственный способ показать игроку скрытую концовку, не отдельный секретный триггер (`act2-act3.md` §4.1). */
+const FINAL_VALVE_SMEKALKA_THRESHOLD = 3;
+
 export async function createDemoScene(
   root: HTMLElement,
   canvas: HTMLCanvasElement,
@@ -735,7 +757,14 @@ export async function createDemoScene(
     // «поставить игру на паузу» посреди спасения было бы честной дырой в
     // давлении времени, поэтому экран инвентаря здесь просто недоступен,
     // пока сцена не разрешена — так же, как он недоступен во время диалога.
-    if (activeDialogue || activeInventory || (rodionSceneActive && !rodionResolved)) return;
+    if (
+      activeDialogue ||
+      activeInventory ||
+      (rodionSceneActive && !rodionResolved) ||
+      (finalValveSceneActive && !finalValveResolved)
+    ) {
+      return;
+    }
     loop.stop();
     activeInventory = createInventoryScreen(root, inventoryState, {
       registry: itemRegistry,
@@ -924,6 +953,196 @@ export async function createDemoScene(
   window.addEventListener('keydown', handleRodionKeyDown);
   window.addEventListener('keyup', handleRodionKeyUp);
   window.addEventListener('blur', handleRodionBlur);
+
+  // Финальная сцена задвижки (`map.truba_final`, `trigger_final_valve`,
+  // `docs/narrative/quests/act2-act3.md` §4.1) — та же модель реалтайм-
+  // оверлея, что и сцена Родиона выше, с двумя отличиями: (1) исход `E`
+  // зависит от `flag.storona` (какому лидеру присягнул игрок в Q5); (2) до
+  // трёх клавиш действия вместо двух — `F` доступна только на ветке
+  // `energosbyt` («довести вентиль до метки», альтернатива полному сбросу),
+  // `G` — скрытая опция «выпить пузырёк со штаммом-0», видна и доступна
+  // только при `Смекалка ≤ 3` (`FINAL_VALVE_SMEKALKA_THRESHOLD`) и
+  // перекрывает любую ветку — это концовка «Очень чистый» (`main-quest.md`
+  // §5.5). Контекстные реплики лидеров перед боем с боссом (`act2-act3.md`
+  // §4.0, обычный `DialogSchema` без давления времени) в эту волну не
+  // вошли — известный, честно задокументированный пробел (см. отчёт OF-036
+  // в `docs/BACKLOG.md`), сама реалтайм-развязка от него не зависит.
+  let finalValveSceneActive = false;
+  let finalValveResolved = false;
+  let finalValveSceneStartMs = 0;
+  let finalValveHoldProgressSec = 0;
+  let finalValveEHeldRaw = false;
+  let finalValveSnapUntilMs: number | null = null;
+  let finalValveDrinkUntilMs: number | null = null;
+  let finalValveReleasedUntilMs: number | null = null;
+  let finalValveOutcomeMessage: string | null = null;
+  let finalValveOutcomeUntilMs: number | null = null;
+
+  function isHeroNearFinalValve(): boolean {
+    const heroT = world.store('transform').get(hero);
+    if (!heroT) return false;
+    const dx = FINAL_VALVE_POSITION.x - heroT.x;
+    const dy = FINAL_VALVE_POSITION.y - heroT.y;
+    return dx * dx + dy * dy <= FINAL_VALVE_RADIUS * FINAL_VALVE_RADIUS;
+  }
+
+  /** `flag.storona` → какая из трёх формулировок исхода `E`/HUD активна (§4.1-4.2 источника). `progress2` и `neytralitet` (и любое ещё не решённое состояние) делят одну ветку — обе ведут к `chugunny_vek`. */
+  function finalValveBranch(): 'energosbyt' | 'chistye' | 'progress2_neutral' {
+    const storona = gameState.flags['flag.storona'];
+    if (storona === 'energosbyt') return 'energosbyt';
+    if (storona === 'chistye') return 'chistye';
+    return 'progress2_neutral';
+  }
+
+  function resolveFinalValveOutcome(effects: readonly Effect[], message: string): void {
+    if (finalValveResolved) return;
+    finalValveResolved = true;
+    finalValveSceneActive = false;
+    finalValveSnapUntilMs = null;
+    finalValveDrinkUntilMs = null;
+    finalValveHoldProgressSec = 0;
+    gameState = applyEffects(gameState, effects);
+    finalValveOutcomeMessage = message;
+    finalValveOutcomeUntilMs = performance.now() + FINAL_VALVE_OUTCOME_MESSAGE_MS;
+  }
+
+  function resolveFinalValveHoldOutcome(): void {
+    const branch = finalValveBranch();
+    if (branch === 'energosbyt') {
+      resolveFinalValveOutcome(
+        [
+          { op: 'setFlag', key: 'flag.truba_deystviye', value: 'vtoroy_sbros' },
+          { op: 'setFlag', key: 'flag.energosbyt_final', value: 'polny_sbros' },
+        ],
+        'Задвижка открыта до конца. Вода уходит в Ольху — вся, сразу.',
+      );
+    } else if (branch === 'chistye') {
+      resolveFinalValveOutcome(
+        [{ op: 'setFlag', key: 'flag.truba_deystviye', value: 'vzryv_plotiny' }],
+        'Плотина вздрагивает и оседает. Ольха свободна.',
+      );
+    } else {
+      resolveFinalValveOutcome(
+        [{ op: 'setFlag', key: 'flag.truba_deystviye', value: 'chugunny_vek' }],
+        'Шов остывает. Задвижка теперь просто кусок железа — как весь этот город.',
+      );
+    }
+  }
+
+  /** Раз в кадр, пока сцена активна и не разрешена — тот же порядок проверок, что `updateRodionScene` (снятие/питьё сначала, таймаут — последним и только если ни одно фиксированное действие не идёт, см. докстринг про гонку у Родиона). */
+  function updateFinalValveScene(now: number, frameDtMs: number): void {
+    if (finalValveSnapUntilMs !== null) {
+      if (now >= finalValveSnapUntilMs) {
+        resolveFinalValveOutcome(
+          [
+            { op: 'setFlag', key: 'flag.truba_deystviye', value: 'po_schetchiku' },
+            { op: 'setFlag', key: 'flag.energosbyt_final', value: 'dozirovka' },
+          ],
+          'Вентиль встал на метку. Сброс дозирован — как договаривались.',
+        );
+      }
+    } else if (finalValveDrinkUntilMs !== null) {
+      if (now >= finalValveDrinkUntilMs) {
+        resolveFinalValveOutcome(
+          [{ op: 'setFlag', key: 'flag.truba_deystviye', value: 'ochen_chisty' }],
+          'Готово. Больше вопросов нет. Очень, очень чисто.',
+        );
+      }
+    } else if (finalValveEHeldRaw && isHeroNearFinalValve()) {
+      finalValveHoldProgressSec += frameDtMs / 1000;
+      finalValveReleasedUntilMs = null;
+      if (finalValveHoldProgressSec >= FINAL_VALVE_HOLD_THRESHOLD_SEC) {
+        resolveFinalValveHoldOutcome();
+        return;
+      }
+    } else if (finalValveHoldProgressSec > 0) {
+      finalValveHoldProgressSec = 0;
+      finalValveReleasedUntilMs = now + FINAL_VALVE_RELEASE_MESSAGE_MS;
+    }
+
+    if (
+      !finalValveResolved &&
+      finalValveSnapUntilMs === null &&
+      finalValveDrinkUntilMs === null &&
+      now - finalValveSceneStartMs >= FINAL_VALVE_SCENE_DURATION_MS
+    ) {
+      resolveFinalValveOutcome(
+        [
+          { op: 'setFlag', key: 'flag.truba_deystviye', value: 'chugunny_vek' },
+          { op: 'setFlag', key: 'flag.truba_final.choice_timeout', value: true },
+        ],
+        'Руки не решились. Задвижка осталась там, где была тридцать лет — ни туда, ни сюда.',
+      );
+    }
+  }
+
+  function computeFinalValveHud(now: number): string | null {
+    if (finalValveOutcomeUntilMs !== null) {
+      if (now < finalValveOutcomeUntilMs) return finalValveOutcomeMessage;
+      finalValveOutcomeUntilMs = null;
+      finalValveOutcomeMessage = null;
+    }
+    if (!finalValveSceneActive || finalValveResolved) return null;
+    const branch = finalValveBranch();
+    if (finalValveSnapUntilMs !== null) return 'Ставишь дозирующий вентиль на отметку тарифа…';
+    if (finalValveDrinkUntilMs !== null) return 'Поднимаешь пузырёк. Пьёшь.';
+    if (finalValveReleasedUntilMs !== null && now < finalValveReleasedUntilMs) {
+      if (branch === 'energosbyt') return 'Сорвалась рука — маховик провернулся назад. Начни заново.';
+      if (branch === 'chistye') return 'Руки дрогнули — цепь разомкнулась. Начни заново.';
+      return 'Шов не взялся — металл ещё горячий. Начни заново.';
+    }
+    if (finalValveHoldProgressSec > 0) {
+      const label =
+        branch === 'energosbyt'
+          ? 'Крутишь маховик'
+          : branch === 'chistye'
+            ? 'Держишь провода вместе'
+            : 'Держишь горелку на шве';
+      return `${label}… ${Math.floor(finalValveHoldProgressSec)}/${FINAL_VALVE_HOLD_THRESHOLD_SEC}с. Не отпускай!`;
+    }
+    const tRemainingSec = Math.ceil(
+      Math.max(0, FINAL_VALVE_SCENE_DURATION_MS - (now - finalValveSceneStartMs)) / 1000,
+    );
+    if (branch === 'energosbyt') {
+      return `Задвижка перед тобой: ${tRemainingSec}с. E — открыть до конца. F — довести до метки.`;
+    }
+    if (branch === 'chistye') return `Заряды заложены: ${tRemainingSec}с. E — замкнуть цепь.`;
+    return `Задвижка перед тобой: ${tRemainingSec}с. E — заварить намертво.`;
+  }
+
+  const handleFinalValveKeyDown = (e: KeyboardEvent): void => {
+    if (e.code === 'KeyE') {
+      finalValveEHeldRaw = true;
+      return;
+    }
+    if (e.code === 'KeyF') {
+      if (!finalValveSceneActive || finalValveResolved || finalValveSnapUntilMs !== null || finalValveDrinkUntilMs !== null) return;
+      if (finalValveBranch() !== 'energosbyt') return;
+      if (!isHeroNearFinalValve()) return;
+      finalValveSnapUntilMs = performance.now() + FINAL_VALVE_SNAP_DURATION_MS;
+      finalValveHoldProgressSec = 0;
+      finalValveReleasedUntilMs = null;
+      return;
+    }
+    if (e.code === 'KeyG') {
+      if (!finalValveSceneActive || finalValveResolved || finalValveSnapUntilMs !== null || finalValveDrinkUntilMs !== null) return;
+      const smekalka = gameState.stats.smekalka;
+      if (smekalka > FINAL_VALVE_SMEKALKA_THRESHOLD) return;
+      if (!isHeroNearFinalValve()) return;
+      finalValveDrinkUntilMs = performance.now() + FINAL_VALVE_DRINK_DURATION_MS;
+      finalValveHoldProgressSec = 0;
+      finalValveReleasedUntilMs = null;
+    }
+  };
+  const handleFinalValveKeyUp = (e: KeyboardEvent): void => {
+    if (e.code === 'KeyE') finalValveEHeldRaw = false;
+  };
+  const handleFinalValveBlur = (): void => {
+    finalValveEHeldRaw = false;
+  };
+  window.addEventListener('keydown', handleFinalValveKeyDown);
+  window.addEventListener('keyup', handleFinalValveKeyUp);
+  window.addEventListener('blur', handleFinalValveBlur);
 
   // OF-019: ручное сохранение/загрузка — F5/F9. Полноценный UI слотов не в
   // скоупе этой задачи; здесь минимум, достаточный, чтобы «сейв → загрузка →
@@ -1172,6 +1391,10 @@ export async function createDemoScene(
           rodionSceneActive = true;
           rodionSceneStartMs = now;
         }
+        if (triggerResult.firedIds.includes('trigger_final_valve') && !finalValveResolved) {
+          finalValveSceneActive = true;
+          finalValveSceneStartMs = now;
+        }
         // `prolog-kruchok.json` сам заканчивается узлом «title» (speaker
         // «narrator», текст — «Глава 1. Труба») — титр главы уже часть
         // диалога, отдельного оверлея поверх сцены не нужно.
@@ -1181,6 +1404,9 @@ export async function createDemoScene(
 
         if (rodionSceneActive && !rodionResolved) {
           updateRodionScene(now, frameDtMs);
+        }
+        if (finalValveSceneActive && !finalValveResolved) {
+          updateFinalValveScene(now, frameDtMs);
         }
         // §11.5 п.2 карты (форс-развязка при входе в T5 без разрешённой сцены)
         // сознательно не реализован буквально: `trigger_t5` стоит в (30,54) с
@@ -1250,6 +1476,8 @@ export async function createDemoScene(
     }
     const rodionHud = computeRodionHud(now);
     if (rodionHud !== null) hud = rodionHud + ' | ' + hud;
+    const finalValveHud = computeFinalValveHud(now);
+    if (finalValveHud !== null) hud = finalValveHud + ' | ' + hud;
     if (heroDeadSinceMs !== null) hud = 'ВЫ ПОГИБЛИ… возрождение | ' + hud;
     if (hintUntilMs !== null && performance.now() < hintUntilMs) {
       hud = 'WASD — идти, ЛКМ — стрелять, E — говорить, I — инвентарь | ' + hud;
@@ -1300,6 +1528,9 @@ export async function createDemoScene(
       window.removeEventListener('keydown', handleRodionKeyDown);
       window.removeEventListener('keyup', handleRodionKeyUp);
       window.removeEventListener('blur', handleRodionBlur);
+      window.removeEventListener('keydown', handleFinalValveKeyDown);
+      window.removeEventListener('keyup', handleFinalValveKeyUp);
+      window.removeEventListener('blur', handleFinalValveBlur);
       unsubscribeFrame();
       unsubscribeHit();
       unsubscribeDeath();
