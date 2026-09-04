@@ -19,6 +19,14 @@
  * так `main-quest.md` §5 сам описывает дефолт («концовка по умолчанию,
  * наименее требовательна к флагам»). Отдельный текст-разбор «ты выбрал X,
  * но не заслужил» — задача слайдов эпилога, не этого модуля.
+ *
+ * Пороги `rep.energosbyt`/`rep.chistye` (2026-09-04, `main-quest.md` §5,
+ * найдено `duxa-review-vs-7.md` P0 №2): прежний `≥ 60` был физически
+ * недостижим — честный максимум одного прохождения даёт диалоговый контент
+ * игры (не бумажный расчёт по мёртвым `onEnter` стадий квеста, которые
+ * никогда не исполняются) — `rep.energosbyt` максимум 25, `rep.chistye`
+ * максимум 40. Новые пороги — `main-quest.md` §5: `rep.energosbyt ≥ 20`
+ * (обе энергосбытовские концовки), `rep.chistye ≥ 30`.
  */
 
 export type EndingId = 'vtoroy_sbros' | 'chugunny_vek' | 'vzryv_plotiny' | 'po_schetchiku' | 'ochen_chisty';
@@ -51,7 +59,7 @@ export function resolveEnding(
       if (
         flags['flag.storona'] === 'energosbyt' &&
         flags['flag.energosbyt_final'] === 'polny_sbros' &&
-        numericFlag(flags, 'rep.energosbyt') >= 60 &&
+        numericFlag(flags, 'rep.energosbyt') >= 20 &&
         flags['flag.vedeneev_sudba'] !== 'mertv'
       ) {
         return {
@@ -66,7 +74,7 @@ export function resolveEnding(
       if (
         flags['flag.storona'] === 'energosbyt' &&
         flags['flag.energosbyt_final'] === 'dozirovka' &&
-        numericFlag(flags, 'rep.energosbyt') >= 60
+        numericFlag(flags, 'rep.energosbyt') >= 20
       ) {
         return {
           id: 'po_schetchiku',
@@ -77,7 +85,7 @@ export function resolveEnding(
       }
       return CHUGUNNY_VEK;
     case 'vzryv_plotiny':
-      if (flags['flag.storona'] === 'chistye' && numericFlag(flags, 'rep.chistye') >= 60) {
+      if (flags['flag.storona'] === 'chistye' && numericFlag(flags, 'rep.chistye') >= 30) {
         return {
           id: 'vzryv_plotiny',
           title: 'Пусть течёт',
