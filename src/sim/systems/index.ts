@@ -17,6 +17,7 @@ import { aiSystem, isEnemyWeaknessActive, spawnEnemy } from './ai';
 import { collisionSystem } from './collision';
 import { combatSystem, createWeaponRuntimeState, createWeaponsComponent } from './combat';
 import { inputControlSystem } from './input-control';
+import { interactionSystem } from './interaction';
 import { movementSystem } from './movement';
 
 export type System = (world: World, dt: number, input: InputSnapshot) => void;
@@ -31,7 +32,9 @@ export {
   combatSystem,
   createWeaponsComponent,
   createWeaponRuntimeState,
+  interactionSystem,
 };
+export type { InteractRequestedEvent } from './interaction';
 
 /** Порядок систем фиксирован и не должен зависеть от порядка регистрации. */
 export const SYSTEM_ORDER: readonly System[] = [
@@ -40,4 +43,5 @@ export const SYSTEM_ORDER: readonly System[] = [
   movementSystem,
   collisionSystem,
   combatSystem,
+  interactionSystem,
 ];

@@ -2,10 +2,12 @@
  * Играбельная demo-сцена вертикального среза (OF-015): склеивает `core`
  * (детерминированный тик + ECS, OF-010), загрузчик карты и героя-болванчика
  * (`world/map-loader.ts`, эта же задача), DOM-ввод (`src/input`), рендер
- * (`PixiRenderer`) и FPS-оверлей (`src/ui`) в одну работающую сцену —
- * тестовая комната 64×64 (`world/dev-fixtures.ts`), герой ходит по WASD,
- * упирается в стены. Настоящая карта «Труба» подключится сюда же в OF-025
- * (замена `createDevTestMap()` на загрузку `public/data/maps/truba.json`).
+ * (`PixiRenderer`) и FPS-оверлей (`src/ui`) в одну работающую сцену. По
+ * умолчанию грузит настоящую локацию «Труба» (`public/data/maps/truba.json`,
+ * OF-025) — тестовая комната 64×64 (`world/dev-fixtures.ts`) осталась только
+ * как `?devroom=1`: детерминированная, минимальная геометрия, на которой
+ * держатся `hero-movement.spec.ts`/`stress.spec.ts` (им важна предсказуемая
+ * механика, а не конкретная локация).
  *
  * OF-016 подключает бой: герой получает боевые компоненты поверх
  * `createHero` (здоровье/оружие/атрибуты — GDD не даёт стартовые статы
@@ -17,13 +19,24 @@
  * через `renderer.emitParticles`. `?stress=1` в URL — режим стресс-теста
  * (300 врагов + залп частиц) для `tests/e2e/stress.spec.ts`.
  *
+ * OF-018/025 подключает диалоги: NPC-метки карты (`spawnMarker`,
+ * kind: 'npc') открывают диалог по нажатию `interact` (E) в радиусе —
+ * событие `input.interact-requested` эмитит `sim` (`interactionSystem`,
+ * единственная законная точка чтения `pressed` внутри тика, см. её
+ * докстринг), `game` слушает и решает, какой NPC ближе. Пока привязка
+ * NPC → файл диалога — простой статический словарь (`NPC_DIALOG_FILES`):
+ * полноценный выбор «какой диалог сейчас активен для этого NPC» по стадии
+ * квеста — задача после OF-025 (main-quest.md уже описывает переходы,
+ * runtime-подключение стадий — не в этой волне).
+ *
  * `main.ts` — единственное место, которое трогает DOM напрямую; эта функция
  * получает уже готовые элементы и дальше сама ничего в `document` не ищет.
  */
 
+import { createAudioEngine, type AudioEngine } from '../audio';
 import { createEventBus, createLoop, createSeededRng, createWorld } from '../core';
 import type { EntityId, World } from '../core/world';
-import type { GameMap } from '../data/schemas';
+import { MapSchema, type GameMap, DialogSchema, type Dialog } from '../data/schemas';
 import { createDomInputSource, type DomInputHandle } from '../input';
 import { clampToMapBounds, createCamera, followTarget } from '../render';
 import { PixiRenderer } from '../render/pixi';
@@ -36,6 +49,7 @@ import {
 } from '../sim';
 import { createFpsOverlay } from '../ui';
 import { createBrowserRaf } from './browser-raf';
+import { createDialogueScreen, createGameState, type GameState } from './dialogue';
 import { createEmptyInventory } from './inventory';
 import {
   applyHeroSave,
@@ -72,6 +86,18 @@ declare global {
   interface Window {
     __outfallDebug?: {
       getHeroPosition(): { x: number; y: number } | null;
+      /**
+       * Мгновенно ставит героя в точку — для e2e-теста диалога
+       * (`tests/e2e/dialogue.spec.ts`): реальная геометрия «Трубы» не
+       * зафиксирована в тесте как контракт (её меняет level-designer без
+       * ведома e2e-теста), а пешая навигация через WASD к конкретному NPC
+       * была бы завязана на текущую расстановку препятствий и хрупкой при
+       * правках уровня — ровно та же ловушка, что уже была с dev-room в
+       * `hero-movement.spec.ts`. Телепорт проверяет именно контракт
+       * «рядом с NPC + E → диалог», не пешую навигацию (её отдельно
+       * покрывает `hero-movement.spec.ts` на детерминированной dev-room).
+       */
+      teleportHero(x: number, y: number): void;
     };
   }
 }
@@ -156,6 +182,39 @@ function isStressMode(): boolean {
   return new URLSearchParams(window.location.search).get('stress') === '1';
 }
 
+/** `?devroom=1` — тестовая комната вместо настоящей «Трубы», см. докстринг файла. */
+function isDevRoomMode(): boolean {
+  return new URLSearchParams(window.location.search).get('devroom') === '1';
+}
+
+/** Реальная локация грузится как статические данные (`public/data`), не бандлится — `MapSchema.parse` не доверяет содержимому файла вслепую. */
+async function loadRealTrubaMap(): Promise<GameMap> {
+  const res = await fetch('/data/maps/truba.json');
+  if (!res.ok) throw new Error(`demo-scene: не удалось загрузить карту «Труба» (${String(res.status)})`);
+  return MapSchema.parse(await res.json());
+}
+
+/** NPC карты «Труба» (`npcs[].id` в `public/data/maps/truba.json`) → файл диалога в `public/data/dialogs/`. `npc.serega_sachok` — декоративный, без диалога (см. отчёт OF-025). */
+const NPC_DIALOG_FILES: Readonly<Record<string, string>> = {
+  'npc.sanitar': 'prolog-smotritel',
+  'npc.rodion': 'prolog-vybor',
+};
+
+/** Имена для подсказки `[E] <имя>` в HUD — `docs/narrative/world-bible.md`. */
+const NPC_DISPLAY_NAMES: Readonly<Record<string, string>> = {
+  'npc.sanitar': 'Санитар',
+  'npc.rodion': 'Родион «Ключик»',
+};
+
+async function loadDialog(fileName: string): Promise<Dialog> {
+  const res = await fetch(`/data/dialogs/${fileName}.json`);
+  if (!res.ok) throw new Error(`demo-scene: не удалось загрузить диалог «${fileName}» (${String(res.status)})`);
+  return DialogSchema.parse(await res.json());
+}
+
+/** Радиус, в котором `interact` (E) открывает диалог с NPC, в тайлах. */
+const INTERACT_RADIUS = 2;
+
 export async function createDemoScene(
   root: HTMLElement,
   canvas: HTMLCanvasElement,
@@ -171,9 +230,26 @@ export async function createDemoScene(
   const rng = createSeededRng(DEV_SEED);
   const world = createWorld(rng, events);
 
-  const map = createDevTestMap();
+  // Процедурный звук (OF-026): подписывается на боевые события той же шины,
+  // что уже слушает `game` для частиц (`combat.hit`/`combat.death` и т.д.,
+  // `src/sim/events.ts`) — никаких файлов, только Web Audio синтез. Контекст
+  // стартует `suspended`, разблокируется первым кликом/нажатием клавиши
+  // (уже реализовано внутри `createAudioEngine`, отдельного вызова не надо).
+  const audioEngine: AudioEngine = createAudioEngine(events);
+
+  const devRoom = isDevRoomMode();
+  const map = devRoom ? createDevTestMap() : await loadRealTrubaMap();
   const loadedMap = loadMapIntoWorld(world, map);
   renderer.setMap(toRendererMapData(map));
+
+  // Диалоги подгружаются заранее (не по требованию), чтобы открытие диалога
+  // при взаимодействии было мгновенным — их всего два, это дёшево.
+  const dialogsByNpcId = new Map<string, Dialog>();
+  if (!devRoom) {
+    for (const [npcId, fileName] of Object.entries(NPC_DIALOG_FILES)) {
+      dialogsByNpcId.set(npcId, await loadDialog(fileName));
+    }
+  }
 
   const spawn = findSpawnPoint(map);
   const hero = createHero(world, spawn);
@@ -203,12 +279,60 @@ export async function createDemoScene(
     renderer.emitParticles({ kind: 'death', wx: payload.wx, wy: payload.wy, count: 18 });
   });
 
+  // Диалоги (OF-018/025): `gameState` живёт здесь и обновляется по мере
+  // выборов игрока (`onStateChange`) — единственный держатель этого
+  // состояния в демо-сцене на сегодня (инвентарь/квесты из диалогов пока не
+  // синхронизированы с `src/game/inventory`/`src/game/quest` — см. TODO в
+  // `interpreter.ts`, это не в скоупе этой волны). Пока открыт диалог, цикл
+  // симуляции остановлен (`loop.stop()`/`loop.start()`) — бой не идёт с
+  // диалоговым коробом на экране.
+  let gameState: GameState = createGameState();
+  let activeDialogue: ReturnType<typeof createDialogueScreen> | null = null;
+
+  function findNearestInteractableNpc(
+    heroX: number,
+    heroY: number,
+  ): { npcId: string; dialog: Dialog } | null {
+    let best: { npcId: string; dialog: Dialog; distSq: number } | null = null;
+    for (const marker of loadedMap.npcEntities) {
+      const spawnMarker = world.store('spawnMarker').get(marker);
+      const transform = world.store('transform').get(marker);
+      if (!spawnMarker || !transform) continue;
+      const dialog = dialogsByNpcId.get(spawnMarker.refId);
+      if (!dialog) continue;
+      const dx = transform.x - heroX;
+      const dy = transform.y - heroY;
+      const distSq = dx * dx + dy * dy;
+      if (distSq > INTERACT_RADIUS * INTERACT_RADIUS) continue;
+      if (!best || distSq < best.distSq) best = { npcId: spawnMarker.refId, dialog, distSq };
+    }
+    return best ? { npcId: best.npcId, dialog: best.dialog } : null;
+  }
+
+  const unsubscribeInteract = world.events.on('input.interact-requested', (payload) => {
+    if (activeDialogue) return;
+    const target = findNearestInteractableNpc(payload.x, payload.y);
+    if (!target) return;
+
+    loop.stop();
+    activeDialogue = createDialogueScreen(root, target.dialog, gameState, {
+      onStateChange(next): void {
+        gameState = next;
+      },
+      onClose(): void {
+        activeDialogue?.destroy();
+        activeDialogue = null;
+        loop.start();
+      },
+    });
+  });
+
   // OF-019: ручное сохранение/загрузка — F5/F9. Полноценный UI слотов не в
   // скоупе этой задачи; здесь минимум, достаточный, чтобы «сейв → загрузка →
-  // бой продолжается» можно было проверить руками в демо-сцене. Инвентарь/
-  // квесты/флаги демо-сцена пока не ведёт (нет живого `InventoryState`/
-  // `GameState` вне диалогов OF-018) — сохраняются пустыми; формат и
-  // `SaveStore` уже готовы к реальной интеграции без изменений (OF-027/028).
+  // бой продолжается» можно было проверить руками в демо-сцене. Инвентарь
+  // демо-сцена пока не ведёт живьём (нет привязки `src/game/inventory` к
+  // ECS-герою) — сохраняется пустым; флаги/квесты уже настоящие — из
+  // `gameState`, который меняют диалоги.
   const saveStore = createSaveStore(window.localStorage);
 
   function captureDemoSaveState(): SaveState {
@@ -218,8 +342,8 @@ export async function createDemoScene(
       hero: captureHeroSave(world, hero),
       weapons: captureWeaponsSave(world, hero),
       inventory: createEmptyInventory(),
-      flags: {},
-      quests: {},
+      flags: gameState.flags,
+      quests: gameState.quests,
       rngSeed: DEV_SEED,
       worldTick: world.tick,
     };
@@ -239,6 +363,7 @@ export async function createDemoScene(
       }
       applyHeroSave(world, hero, loaded.hero);
       applyWeaponsSave(world, hero, loaded.weapons);
+      gameState = { ...gameState, flags: loaded.flags, quests: loaded.quests };
       console.log('[save] загружено');
     }
   };
@@ -286,6 +411,10 @@ export async function createDemoScene(
         const weaponName = weapons.equipped.replace('item.', '');
         hud += ` | HP ${Math.ceil(health.hp)}/${health.maxHp} | ${weaponName} ${ammo}`;
       }
+      if (!activeDialogue && !devRoom) {
+        const nearby = findNearestInteractableNpc(heroTransform.x, heroTransform.y);
+        hud += nearby ? ` | [E] ${NPC_DISPLAY_NAMES[nearby.npcId] ?? nearby.npcId}` : '';
+      }
     }
     fpsOverlay.update(fps);
     fpsOverlay.element.textContent = hud;
@@ -303,6 +432,14 @@ export async function createDemoScene(
       const transform = world.store('transform').get(hero);
       return transform ? { x: transform.x, y: transform.y } : null;
     },
+    teleportHero(x: number, y: number): void {
+      const transform = world.store('transform').get(hero);
+      if (!transform) return;
+      transform.x = x;
+      transform.y = y;
+      transform.prevX = x;
+      transform.prevY = y;
+    },
   };
 
   return {
@@ -313,9 +450,12 @@ export async function createDemoScene(
       unsubscribeFrame();
       unsubscribeHit();
       unsubscribeDeath();
+      unsubscribeInteract();
+      activeDialogue?.destroy();
       input.destroy();
       fpsOverlay.destroy();
       renderer.destroy();
+      audioEngine.destroy();
       delete window.__outfallDebug;
     },
   };

@@ -52,13 +52,17 @@ test('стресс: 300 врагов + 2000 частиц не роняют FPS �
   });
   page.on('pageerror', (err) => consoleErrors.push(String(err)));
 
-  await startGame(page);
+  // `devroom=1` — та же детерминированная тестовая комната, что и в
+  // `hero-movement.spec.ts` (не настоящая «Труба», OF-025): нагрузочному
+  // тесту важна предсказуемая геометрия для спавна 300 врагов на свободных
+  // клетках, а не конкретная локация.
+  await startGame(page, '?devroom=1');
   await expect(page.locator('#game-canvas')).toBeVisible();
   await expect(page.locator('#fps-overlay')).toHaveText(/FPS: \d+/, { timeout: 10_000 });
   await page.waitForTimeout(WARMUP_MS);
   const baselineAvg = await sampleFpsAverage(page);
 
-  await startGame(page, '?stress=1');
+  await startGame(page, '?stress=1&devroom=1');
   await expect(page.locator('#game-canvas')).toBeVisible();
   await expect(page.locator('#fps-overlay')).toHaveText(/FPS: \d+/, { timeout: 10_000 });
   await page.waitForTimeout(WARMUP_MS);

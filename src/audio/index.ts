@@ -1,13 +1,11 @@
 /**
- * Слой `audio`: чистый WebAudio, без внешних библиотек. Подписывается на
- * события шины (`audio:play`, `audio:music`) — `sim` никогда не вызывает
- * аудио напрямую (§3.9). Реализация — задача OF-026.
+ * Публичный вход слоя `audio`: чистый WebAudio (процедурный синтез,
+ * `synth.ts`), без файлов и без внешних библиотек. `createAudioEngine`
+ * (`audio-engine.ts`, OF-026) подписывается на боевые события шины —
+ * `sim`/`game` никогда не вызывают `AudioContext` напрямую (§3.9,
+ * `docs/tech/architecture.md` §1).
  */
 
-export interface AudioEngine {
-  play(sfx: string, opts?: { wx?: number; wy?: number; volume?: number }): void;
-  playMusic(track: string | null, fadeSec: number): void;
-  /** Разблокировка WebAudio по первому пользовательскому жесту (нужна для Safari/iOS). */
-  unlock(): Promise<void>;
-  destroy(): void;
-}
+export { createAudioEngine, DEFAULT_MAX_VOICES, type AudioEngine, type CreateAudioEngineOptions } from './audio-engine';
+export * from './synth';
+export * from './types';
