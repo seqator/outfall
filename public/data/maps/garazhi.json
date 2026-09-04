@@ -4555,6 +4555,15 @@
       "count": 8
     },
     {
+      "id": "pickup_ammo_shotgun_market",
+      "itemId": "item.ammo_shotgun",
+      "position": {
+        "x": 31,
+        "y": 14
+      },
+      "count": 4
+    },
+    {
       "id": "pickup_bint_barrack",
       "itemId": "item.cons_bint",
       "position": {

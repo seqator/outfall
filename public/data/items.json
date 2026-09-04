@@ -29,6 +29,35 @@
     "effects": []
   },
   {
+    "id": "item.shotgun_duplo",
+    "nameKey": "item.shotgun_duplo.name",
+    "descKey": "item.shotgun_duplo.desc",
+    "kind": "weapon",
+    "weight": 3.5,
+    "value": 260,
+    "stack": 1,
+    "weapon": {
+      "branch": "heavy",
+      "damage": 14,
+      "rateMs": 1400,
+      "magazine": 2,
+      "reloadMs": 1800,
+      "spreadDeg": 18,
+      "ammo": "item.ammo_shotgun"
+    },
+    "effects": []
+  },
+  {
+    "id": "item.ammo_shotgun",
+    "nameKey": "item.ammo_shotgun.name",
+    "descKey": "item.ammo_shotgun.desc",
+    "kind": "ammo",
+    "weight": 0.04,
+    "value": 9,
+    "stack": 100,
+    "effects": []
+  },
+  {
     "id": "item.cons_bint",
     "nameKey": "item.cons_bint.name",
     "descKey": "item.cons_bint.desc",

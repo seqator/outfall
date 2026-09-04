@@ -89,3 +89,41 @@ test('перезарядка реально ограничена резерво�
 
   expect(consoleErrors).toEqual([]);
 });
+
+/**
+ * Регрессия на P1 из девятой рецензии duxa-simulator (`duxa-review-vs-9.md`
+ * §0.3): до этого фикса `item.shotgun_duplo` не был зарегистрирован как
+ * `Item` в `public/data/items.json` и не имел ни одной точки подбора
+ * патронов — стартовые 2 патрона в магазине были всем боезапасом «Дупла» на
+ * всю игру, `reserveAmmo` стартовал с `0` и оставался `0` навсегда. Фикс
+ * (`OF-060`) — данные (`item.shotgun_duplo`/`item.ammo_shotgun` в
+ * `items.json`, пикапы на `garazhi`/`plotina`) без единой правки кода:
+ * `syncWeaponReserveAmmo` (`demo-scene.ts`) уже читал `item.weapon.ammo` из
+ * реестра для любого оружия из `AMMO_WEAPON_IDS` — «Дупло» просто не имело
+ * записи. Этот тест подтверждает, что реестр/пикап реально подключены, не
+ * только что схема валидна.
+ */
+test('«Дупло» реально подбирает патроны 12-го калибра с карты, резерв больше не заперт на 0', async ({
+  page,
+}) => {
+  const consoleErrors: string[] = [];
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') consoleErrors.push(msg.text());
+  });
+  page.on('pageerror', (err) => consoleErrors.push(String(err)));
+
+  await startGame(page, '?map=garazhi');
+  await expect(page.locator('#game-canvas')).toBeVisible();
+  await expect(page.locator('#fps-overlay')).toHaveText(/FPS: \d+/, { timeout: 5000 });
+
+  const getShotgunAmmo = (): Promise<{ ammo: number; reserveAmmo: number } | null | undefined> =>
+    page.evaluate(() => window.__outfallDebug?.getWeaponAmmo('item.shotgun_duplo'));
+
+  await expect.poll(getShotgunAmmo, { timeout: 3000 }).toEqual({ ammo: 2, reserveAmmo: 0 });
+
+  // `pickup_ammo_shotgun_market` — (31,14) в `public/data/maps/garazhi.json`.
+  await page.evaluate(() => window.__outfallDebug?.teleportHero(31, 14));
+  await expect.poll(getShotgunAmmo, { timeout: 3000 }).toEqual({ ammo: 2, reserveAmmo: 4 });
+
+  expect(consoleErrors).toEqual([]);
+});

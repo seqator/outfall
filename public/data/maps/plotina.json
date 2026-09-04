@@ -6530,6 +6530,15 @@
       "count": 8
     },
     {
+      "id": "pickup_ammo_shotgun_hall",
+      "itemId": "item.ammo_shotgun",
+      "position": {
+        "x": 16,
+        "y": 18
+      },
+      "count": 4
+    },
+    {
       "id": "pickup_bint_hospital",
       "itemId": "item.cons_bint",
       "position": {
