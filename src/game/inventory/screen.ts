@@ -40,6 +40,8 @@ export interface InventoryScreenOptions {
   readonly t: I18n['t'];
   /** Вызывается после каждого изменения состояния — обычно записывает его в `SaveStore`/ECS-компонент вызывающей стороны (OF-019/будущая интеграция). */
   onStateChange?(state: InventoryState): void;
+  /** Вызывается по кнопке закрытия панели (`src/ui/inventory/render.ts`) — вызывающая сторона снимает паузу и уничтожает экран. */
+  onClose?(): void;
 }
 
 export interface InventoryScreen {
@@ -157,7 +159,9 @@ export function createInventoryScreen(
       refresh();
     },
     onClose(): void {
-      // Закрытие экрана (снятие с паузы, возврат фокуса) — обязанность интеграции сцены (OF-027), не этого модуля.
+      // Снятие с паузы/возврат фокуса — обязанность интеграции сцены (OF-027);
+      // этот модуль только пробрасывает клик по кнопке закрытия наверх.
+      options.onClose?.();
     },
   };
 

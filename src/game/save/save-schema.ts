@@ -52,9 +52,11 @@ const EquipmentSaveSchema = z.object(
 
 const InventorySaveSchema = z.object({
   // `.readonly()` — форма поля один в один с `InventoryState.backpack`
-  // (`game/inventory/types.ts`, `readonly InventoryStack[]`), чтобы
-  // реальное `InventoryState` можно было положить в `SaveState.inventory`
-  // без приведения типов.
+  // (`game/inventory/types.ts`, `readonly InventoryStack[]`): класть
+  // `InventoryState` сюда (сохранение) можно без приведения типов, а обратно
+  // (загрузка) — через `toInventoryState` (`inventory-save.ts`), т.к. zod
+  // `.optional()` даёт `T | undefined`, а `exactOptionalPropertyTypes`
+  // требует отсутствия поля вместо `undefined`-значения.
   backpack: z.array(InventoryStackSaveSchema).readonly(),
   equipment: EquipmentSaveSchema,
   wallet: z.number().nonnegative(),

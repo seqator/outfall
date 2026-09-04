@@ -7,3 +7,4 @@ export * from './migrations';
 export * from './save-store';
 export * from './memory-storage';
 export * from './hero-save';
+export * from './inventory-save';

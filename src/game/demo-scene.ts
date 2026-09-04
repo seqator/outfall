@@ -51,7 +51,16 @@ import { createFpsOverlay } from '../ui';
 import { createBrowserRaf } from './browser-raf';
 import { createDialogueScreen, createGameState, type GameState } from './dialogue';
 import { createI18n, loadI18nDictionary, type I18n } from './i18n';
-import { createEmptyInventory } from './inventory';
+import {
+  addItem,
+  createEmptyInventory,
+  createInventoryScreen,
+  createItemRegistry,
+  nextDevUid,
+  type ArmorSlotTable,
+  type InventoryScreen,
+  type InventoryState,
+} from './inventory';
 import {
   applyHeroSave,
   applyWeaponsSave,
@@ -59,6 +68,7 @@ import {
   captureWeaponsSave,
   createSaveStore,
   CURRENT_SAVE_SCHEMA_VERSION,
+  toInventoryState,
   type SaveState,
 } from './save';
 import { createDevTestMap } from './world/dev-fixtures';
@@ -121,6 +131,8 @@ const PLAYER_MAX_HP = 80;
 const PLAYER_DEFAULT_SKILL = 50;
 const PLAYER_DEFAULT_COURAGE = 5;
 const PLAYER_DEFAULT_REFLEX = 5;
+/** То же допущение «КОСТЯК-база 5» (см. выше), нужное отдельно для лимита переносимого веса (`items-economy.md` §1.1, `weightLimitKg`). */
+const PLAYER_KARKAS = 5;
 
 /** Три врага среза (`docs/design/combat.md` §2.1–2.3) — остальные пять `spawnMarker` refId вне скоупа OF-016 (OF-035) и молча игнорируются. */
 const SLICE_ENEMY_DEF_IDS: ReadonlySet<EnemyDefId> = new Set<EnemyDefId>([
@@ -219,6 +231,13 @@ async function loadDialog(fileName: string): Promise<Dialog> {
   return DialogSchema.parse(await res.json());
 }
 
+/** `createItemRegistry` сам валидирует каждую запись по `ItemSchema` — здесь только сырой JSON. */
+async function loadRawItems(): Promise<readonly unknown[]> {
+  const res = await fetch('/data/items.json');
+  if (!res.ok) throw new Error(`demo-scene: не удалось загрузить предметы (${String(res.status)})`);
+  return (await res.json()) as readonly unknown[];
+}
+
 /** Радиус, в котором `interact` (E) открывает диалог с NPC, в тайлах. */
 const INTERACT_RADIUS = 2;
 
@@ -288,6 +307,15 @@ export async function createDemoScene(
   const i18n: I18n = createI18n('ru', await loadI18nDictionary('ru'));
   const t = (key: string): string => i18n.t(key);
 
+  // Инвентарь (OF-017/OF-027): реестр предметов из настоящего контента
+  // (`public/data/items.json`), брони в текущей волне нет — таблица слотов
+  // брони пуста, это честное состояние, а не заглушка. До этой правки экран
+  // инвентаря существовал как модуль, но был физически недостижим в игре —
+  // `KeyI` был замаплен во входе (`src/input/dom-input.ts`), но сцена его не
+  // слушала (`duxa-review-vs-2.md`, P0 №2).
+  const itemRegistry = createItemRegistry(await loadRawItems());
+  const armorSlots: ArmorSlotTable = new Map();
+
   // Точка старта — геометрический центр карты `findSpawnPoint(map)` подходит
   // только для карт без сюжетной постановки (dev-room); настоящая «Труба»
   // начинается в зоне A (`TRUBA_START_POINT`, см. докстринг константы) — это
@@ -296,6 +324,21 @@ export async function createDemoScene(
   const spawn = devRoom ? findSpawnPoint(map) : TRUBA_START_POINT;
   const hero = createHero(world, spawn);
   attachCombatComponents(world, hero);
+
+  // Стартовые расходники в вещмешке (`items-economy.md` §4) — иначе экран
+  // инвентаря открывается пустым, что выглядит как ещё один недостижимый
+  // экран. Оружие героя сюда намеренно не кладётся: боевой пистолет — это
+  // ECS-компонент `weapons` (`attachCombatComponents` выше), отдельная
+  // система от вещмешка; класть его копию в инвентарь без синхронизации
+  // с боем создало бы фальшивую механику экипировки.
+  let inventoryState: InventoryState = createEmptyInventory();
+  for (const [itemId, quantity] of [
+    ['item.ammo_pistol', 20],
+    ['item.cons_bint', 2],
+    ['item.mat_detali', 3],
+  ] as const) {
+    inventoryState = addItem(inventoryState, itemRegistry, { itemId, quantity, uid: nextDevUid() }).state;
+  }
 
   // В dev-room врагов спавнить сразу — там нет ни триггеров, ни сюжета,
   // `hero-movement.spec.ts`/`stress.spec.ts` рассчитаны именно на это. На
@@ -337,6 +380,7 @@ export async function createDemoScene(
   // диалоговым коробом на экране.
   let gameState: GameState = createGameState();
   let activeDialogue: ReturnType<typeof createDialogueScreen> | null = null;
+  let activeInventory: InventoryScreen | null = null;
 
   function findNearestInteractableNpc(
     heroX: number,
@@ -388,12 +432,44 @@ export async function createDemoScene(
     openDialogue(target.dialog);
   });
 
+  /** Закрывает экран инвентаря — общая точка и для `KeyI`, и для клика по кнопке закрытия внутри панели (`onClose`). */
+  function closeInventory(): void {
+    if (!activeInventory) return;
+    activeInventory.destroy();
+    activeInventory = null;
+    loop.start();
+  }
+
+  function openInventory(): void {
+    if (activeDialogue || activeInventory) return;
+    loop.stop();
+    activeInventory = createInventoryScreen(root, inventoryState, {
+      registry: itemRegistry,
+      armorSlots,
+      karkas: PLAYER_KARKAS,
+      t,
+      onStateChange(next): void {
+        inventoryState = next;
+      },
+      onClose: closeInventory,
+    });
+  }
+
+  const handleInventoryKey = (e: KeyboardEvent): void => {
+    if (e.code !== 'KeyI') return;
+    e.preventDefault();
+    if (activeInventory) closeInventory();
+    else openInventory();
+  };
+  window.addEventListener('keydown', handleInventoryKey);
+
   // OF-019: ручное сохранение/загрузка — F5/F9. Полноценный UI слотов не в
   // скоупе этой задачи; здесь минимум, достаточный, чтобы «сейв → загрузка →
   // бой продолжается» можно было проверить руками в демо-сцене. Инвентарь
-  // демо-сцена пока не ведёт живьём (нет привязки `src/game/inventory` к
-  // ECS-герою) — сохраняется пустым; флаги/квесты уже настоящие — из
-  // `gameState`, который меняют диалоги.
+  // (`inventoryState`, OF-027) — обычные данные, форма `SaveState.inventory`
+  // зеркалит `InventoryState` один в один (`save-schema.ts`), поэтому кладём
+  // и читаем напрямую без отдельных capture/apply-функций, как для героя/оружия.
+  // Флаги/квесты — из `gameState`, который меняют диалоги.
   const saveStore = createSaveStore(window.localStorage);
 
   function captureDemoSaveState(): SaveState {
@@ -402,7 +478,7 @@ export async function createDemoScene(
       savedAtMs: Date.now(),
       hero: captureHeroSave(world, hero),
       weapons: captureWeaponsSave(world, hero),
-      inventory: createEmptyInventory(),
+      inventory: inventoryState,
       flags: gameState.flags,
       quests: gameState.quests,
       rngSeed: DEV_SEED,
@@ -425,6 +501,8 @@ export async function createDemoScene(
       applyHeroSave(world, hero, loaded.hero);
       applyWeaponsSave(world, hero, loaded.weapons);
       gameState = { ...gameState, flags: loaded.flags, quests: loaded.quests };
+      inventoryState = toInventoryState(loaded.inventory);
+      activeInventory?.update(inventoryState);
       console.log('[save] загружено');
     }
   };
@@ -545,7 +623,7 @@ export async function createDemoScene(
     }
     if (heroDeadSinceMs !== null) hud = 'ВЫ ПОГИБЛИ… возрождение | ' + hud;
     if (hintUntilMs !== null && performance.now() < hintUntilMs) {
-      hud = 'WASD — идти, ЛКМ — стрелять, E — говорить | ' + hud;
+      hud = 'WASD — идти, ЛКМ — стрелять, E — говорить, I — инвентарь | ' + hud;
     }
     fpsOverlay.update(fps);
     fpsOverlay.element.textContent = hud;
@@ -583,11 +661,13 @@ export async function createDemoScene(
       loop.stop();
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('keydown', handleSaveLoadKey);
+      window.removeEventListener('keydown', handleInventoryKey);
       unsubscribeFrame();
       unsubscribeHit();
       unsubscribeDeath();
       unsubscribeInteract();
       activeDialogue?.destroy();
+      activeInventory?.destroy();
       input.destroy();
       fpsOverlay.destroy();
       renderer.destroy();
