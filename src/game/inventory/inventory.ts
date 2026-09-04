@@ -6,8 +6,8 @@
  * (`game`-оркестрация) сама решает, откуда брать `uid` новых стеков.
  */
 
-import { requireItem, type ItemRegistry } from './registry';
 import { resolveEquipmentSlot, type ArmorSlotTable } from './equip-slots';
+import { requireItem, type ItemRegistry } from './registry';
 import type { EquipmentSlotId, InventoryStack, InventoryState } from './types';
 
 function replaceBackpack(
@@ -63,6 +63,7 @@ export function addItem(
   let remaining = quantity;
   let backpack = state.backpack;
   let stackUid = input.uid;
+  let toppedOff = false;
 
   if (!decaying && maxStack > 1) {
     const targetIndex = backpack.findIndex(
@@ -78,13 +79,16 @@ export function addItem(
           backpack = backpack.map((s, i) => (i === targetIndex ? updated : s));
           remaining -= fill;
           stackUid = target.uid;
+          toppedOff = true;
         }
       }
     }
   }
 
+  // Второй стек в одном вызове не заводим: долили существующий — остаток
+  // отклонён, вызывающая сторона позовёт addItem повторно с новым uid.
   let added = quantity - remaining;
-  if (remaining > 0) {
+  if (remaining > 0 && !toppedOff) {
     const newQuantity = Math.min(remaining, maxStack);
     const newStack: InventoryStack = {
       uid: input.uid,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createItemRegistry, requireItem } from '../../../../src/game/inventory/registry';
 import { DEV_ITEM_IDS, rawDevItems } from '../../../../src/game/inventory/fixtures/dev-items';
+import { createItemRegistry, requireItem } from '../../../../src/game/inventory/registry';
 
 describe('game/inventory/registry: createItemRegistry', () => {
   it('валидирует и индексирует фикстуру из 10 предметов по ItemSchema', () => {
