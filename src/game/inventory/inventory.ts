@@ -6,6 +6,7 @@
  * (`game`-оркестрация) сама решает, откуда брать `uid` новых стеков.
  */
 
+import type { Item } from '../../data/schemas';
 import { resolveEquipmentSlot, type ArmorSlotTable } from './equip-slots';
 import { requireItem, type ItemRegistry } from './registry';
 import type { EquipmentSlotId, InventoryStack, InventoryState } from './types';
@@ -229,4 +230,49 @@ export function unequipItem(state: InventoryState, slot: EquipmentSlotId): Unequ
     state: { ...state, equipment, backpack: [...state.backpack, current] },
     ok: true,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Использование расходников
+// ---------------------------------------------------------------------------
+
+export interface UseConsumableOutcome {
+  readonly state: InventoryState;
+  readonly ok: boolean;
+  /** Использованный предмет (для чтения `effects` вызывающей стороной) — присутствует только при `ok: true`. */
+  readonly item?: Item;
+}
+
+/**
+ * Использует один экземпляр стека `uid` из вещмешка — только для
+ * `kind: 'consumable'` (аптечка «Бинт» и т.п., `items-economy.md` §4).
+ * Уменьшает стек на 1 через уже существующий `removeItem` выше, не
+ * дублирует его логику. Что именно делает эффект предмета (`item.effects`,
+ * `ItemSchema`) — не забота этого модуля: `inventory.ts` не знает о `World`/
+ * ECS (граница слоёв, докстринг файла) и не может, например, прибавить ХП
+ * герою напрямую. Вместо этого возвращает использованный `Item` целиком —
+ * вызывающая сторона (`game/inventory/screen.ts` → `demo-scene.ts`,
+ * единственный слой, которому разрешено знать и инвентарь, и ECS
+ * одновременно, OF-058) сама читает `item.effects` и решает, что применить
+ * (`heal` → `health.hp` героя).
+ *
+ * `ok: false` без изменения состояния — предмет не расходник
+ * (`kind !== 'consumable'`, например попытка «использовать» оружие) или
+ * `uid` не найден/уже пуст в вещмешке.
+ */
+export function useConsumable(
+  state: InventoryState,
+  registry: ItemRegistry,
+  uid: string,
+): UseConsumableOutcome {
+  const stack = state.backpack.find((s) => s.uid === uid);
+  if (!stack) return { state, ok: false };
+
+  const item = requireItem(registry, stack.itemId);
+  if (item.kind !== 'consumable') return { state, ok: false };
+
+  const outcome = removeItem(state, uid, 1);
+  if (outcome.removed === 0) return { state, ok: false };
+
+  return { state: outcome.state, ok: true, item };
 }

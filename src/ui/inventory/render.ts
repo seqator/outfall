@@ -207,10 +207,6 @@ export function createInventoryPanel(root: HTMLElement, handlers: InventoryHandl
     if (item.decay) lines.push(`Распад через: ${formatDecay(item.decay.remainingMs)}`);
     text.textContent = lines.join('\n');
 
-    const equipButton = styled('button', { display: 'block', marginTop: '8px', cursor: 'pointer' });
-    equipButton.textContent = 'Экипировать';
-    equipButton.addEventListener('click', () => handlers.onEquip(item.uid));
-
     const dropButton = styled('button', {
       display: 'block',
       marginTop: '4px',
@@ -220,7 +216,26 @@ export function createInventoryPanel(root: HTMLElement, handlers: InventoryHandl
     dropButton.textContent = 'Выбросить';
     dropButton.addEventListener('click', () => handlers.onDrop(item.uid));
 
-    description.append(text, equipButton, dropButton);
+    // Расходники (`usable`, OF-058, `items-economy.md` §4) показывают
+    // «Использовать» вместо «Экипировать» — предметы этого `kind` никогда
+    // не занимают слот экипировки (`equip-slots.ts: resolveEquipmentSlot`
+    // возвращает `null` для `consumable`), обе кнопки одновременно не имели
+    // бы смысла для одного и того же предмета.
+    const primaryButton = styled('button', {
+      display: 'block',
+      marginTop: '8px',
+      cursor: 'pointer',
+      ...(item.usable ? { color: PALETTE.terminalPhosphor } : {}),
+    });
+    if (item.usable) {
+      primaryButton.textContent = 'Использовать';
+      primaryButton.addEventListener('click', () => handlers.onUse(item.uid));
+    } else {
+      primaryButton.textContent = 'Экипировать';
+      primaryButton.addEventListener('click', () => handlers.onEquip(item.uid));
+    }
+
+    description.append(text, primaryButton, dropButton);
   }
 
   function update(vm: InventoryViewModel): void {

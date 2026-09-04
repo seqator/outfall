@@ -14,6 +14,7 @@
  * DOM», который такая обвязка сможет использовать без изменений.
  */
 
+import type { Item } from '../../data/schemas';
 import {
   createInventoryPanel,
   type InventoryHandlers,
@@ -23,7 +24,7 @@ import {
 } from '../../ui/inventory';
 import type { I18n } from '../i18n';
 import type { ArmorSlotTable } from './equip-slots';
-import { equipItem, removeItem, unequipItem } from './inventory';
+import { equipItem, removeItem, unequipItem, useConsumable } from './inventory';
 import { requireItem, type ItemRegistry } from './registry';
 import { EQUIPMENT_SLOT_IDS, type EquipmentSlotId, type InventoryState } from './types';
 import { totalWeightKg, weightLimitKg } from './weight';
@@ -40,6 +41,18 @@ export interface InventoryScreenOptions {
   readonly t: I18n['t'];
   /** Вызывается после каждого изменения состояния — обычно записывает его в `SaveStore`/ECS-компонент вызывающей стороны (OF-019/будущая интеграция). */
   onStateChange?(state: InventoryState): void;
+  /**
+   * Вызывается сразу ПОСЛЕ того, как расходник реально израсходован
+   * (`useConsumable`, `inventory.ts` — стек уже уменьшен в `state`) —
+   * передаёт использованный `Item` целиком. `game/inventory/**` не знает о
+   * `World`/ECS (граница слоёв, докстринг `inventory.ts`) и не может сам
+   * прочитать `item.effects`/`op:'heal'` и прибавить ХП герою — это делает
+   * вызывающая сторона (`demo-scene.ts`, OF-058), единственный слой, у
+   * которого есть оба: инвентарь и ECS. Без колбэка (не задан) предмет всё
+   * равно расходуется — экран инвентаря не зависит от того, есть ли у
+   * предмета игровой эффект вообще.
+   */
+  onUse?(item: Item): void;
   /** Вызывается по кнопке закрытия панели (`src/ui/inventory/render.ts`) — вызывающая сторона снимает паузу и уничтожает экран. */
   onClose?(): void;
 }
@@ -66,6 +79,7 @@ function toItemView(
     weightKg: item.weight,
     priceGaiki: item.value,
     effectText: t(item.descKey),
+    usable: item.kind === 'consumable',
     ...(decayRemainingMs !== undefined
       ? { decay: { remainingMs: decayRemainingMs, warning: decayRemainingMs < DECAY_WARNING_MS } }
       : {}),
@@ -156,6 +170,28 @@ export function createInventoryScreen(
       state = outcome.state;
       if (selectedUid === uid) selectedUid = undefined;
       emitChange();
+      refresh();
+    },
+    onUse(uid): void {
+      const outcome = useConsumable(state, options.registry, uid);
+      if (!outcome.ok || !outcome.item) {
+        refresh();
+        return;
+      }
+      state = outcome.state;
+      // Стек мог опустеть целиком (`quantity` дошло до 0, `useConsumable` →
+      // `removeItem` убирает такой стек из вещмешка) — выбор сбрасывается,
+      // иначе панель описания продолжала бы указывать на исчезнувший `uid`.
+      if (selectedUid === uid && !state.backpack.some((s) => s.uid === uid)) {
+        selectedUid = undefined;
+      }
+      emitChange();
+      // ПОСЛЕ `emitChange()`: вызывающая сторона (`demo-scene.ts`) применяет
+      // игровой эффект предмета (`heal` → ECS `health.hp`) уже поверх
+      // актуального `InventoryState`, а не до него — порядок не влияет на
+      // сам инвентарь (эффект не читает его обратно), но так порядок
+      // побочных эффектов предсказуем для вызывающей стороны.
+      options.onUse?.(outcome.item);
       refresh();
     },
     onClose(): void {

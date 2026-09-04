@@ -36,7 +36,7 @@
     "weight": 0.6,
     "value": 60,
     "stack": 5,
-    "effects": []
+    "effects": [{ "op": "heal", "amount": 35 }]
   },
   {
     "id": "item.mat_detali",

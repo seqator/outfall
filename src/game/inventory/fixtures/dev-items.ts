@@ -100,7 +100,9 @@ export const rawDevItems: readonly unknown[] = [
     weight: 0.6,
     value: 60,
     stack: 5,
-    effects: [],
+    // `docs/design/items-economy.md` §4 №13: «+35 ХП» — OF-058, тот же
+    // общий язык эффектов, что и `public/data/items.json`.
+    effects: [{ op: 'heal', amount: 35 }],
   },
   {
     id: DEV_ITEM_IDS.ammo9mm,

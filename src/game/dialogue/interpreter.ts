@@ -188,6 +188,12 @@ export function applyEffect(state: GameState, effect: Effect): GameState {
       return { ...state, hp: Math.max(0, state.hp - effect.amount) };
     case 'xp':
       return { ...state, xp: state.xp + effect.amount };
+    case 'heal':
+      // Плоский `GameState.hp` здесь не знает `maxHp` (см. докстринг поля
+      // выше) — ровно как `damage` не капается сверху, `heal` не капается
+      // снизу за пределы 0. Реальное лечение героя (OF-058) идёт мимо этого
+      // интерпретатора, см. `rules.ts` докстринг оператора `heal`.
+      return { ...state, hp: state.hp + effect.amount };
   }
 }
 

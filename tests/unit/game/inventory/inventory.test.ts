@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { DEV_ITEM_IDS, devArmorSlots, rawDevItems } from '../../../../src/game/inventory/fixtures/dev-items';
-import { addItem, equipItem, removeItem, unequipItem } from '../../../../src/game/inventory/inventory';
+import {
+  addItem,
+  equipItem,
+  removeItem,
+  unequipItem,
+  useConsumable,
+} from '../../../../src/game/inventory/inventory';
 import { createItemRegistry } from '../../../../src/game/inventory/registry';
 import { createEmptyInventory } from '../../../../src/game/inventory/types';
 
@@ -206,6 +212,47 @@ describe('game/inventory/inventory: unequipItem', () => {
   it('пустой слот — ok: false, состояние не меняется', () => {
     const state = createEmptyInventory();
     const outcome = unequipItem(state, 'ranged');
+    expect(outcome).toEqual({ state, ok: false });
+  });
+});
+
+describe('game/inventory/inventory: useConsumable', () => {
+  it('расходует один экземпляр стека и возвращает использованный Item (для чтения effects вызывающей стороной)', () => {
+    const state = addItem(createEmptyInventory(), registry, {
+      itemId: DEV_ITEM_IDS.consBint,
+      quantity: 2,
+      uid: 'bint-1',
+    }).state;
+    const outcome = useConsumable(state, registry, 'bint-1');
+    expect(outcome.ok).toBe(true);
+    expect(outcome.item?.id).toBe(DEV_ITEM_IDS.consBint);
+    expect(outcome.item?.effects).toEqual([{ op: 'heal', amount: 35 }]);
+    expect(outcome.state.backpack).toEqual([{ uid: 'bint-1', itemId: DEV_ITEM_IDS.consBint, quantity: 1 }]);
+  });
+
+  it('стек с quantity 1 полностью исчезает из вещмешка после использования', () => {
+    const state = addItem(createEmptyInventory(), registry, {
+      itemId: DEV_ITEM_IDS.consBint,
+      quantity: 1,
+      uid: 'bint-1',
+    }).state;
+    const outcome = useConsumable(state, registry, 'bint-1');
+    expect(outcome.ok).toBe(true);
+    expect(outcome.state.backpack).toEqual([]);
+  });
+
+  it('kind !== "consumable" (например оружие) — ok: false, состояние не меняется', () => {
+    const state = addItem(createEmptyInventory(), registry, {
+      itemId: DEV_ITEM_IDS.pistolOgryzok,
+      uid: 'pistol-1',
+    }).state;
+    const outcome = useConsumable(state, registry, 'pistol-1');
+    expect(outcome).toEqual({ state, ok: false });
+  });
+
+  it('uid не найден в вещмешке — ok: false, состояние не меняется', () => {
+    const state = createEmptyInventory();
+    const outcome = useConsumable(state, registry, 'missing');
     expect(outcome).toEqual({ state, ok: false });
   });
 });

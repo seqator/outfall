@@ -72,6 +72,27 @@ export const EffectSchema = z.union([
   z.object({ op: z.literal('startQuest'), quest: namespacedId('quest') }),
   z.object({ op: z.literal('damage'), amount: z.number().positive() }),
   z.object({ op: z.literal('xp'), amount: z.number().positive() }),
+  /**
+   * Лечит `amount` ХП — эффект расходников (`kind: 'consumable'`, напр.
+   * `item.cons_bint`, `docs/design/items-economy.md` §4 №13: «+35 ХП»,
+   * OF-058). Тем же общим языком, что уже используют диалоги/квесты/
+   * триггеры (`walkCondition`/`applyEffects`, заголовок файла) — предмет
+   * несёт `effects: [{op:'heal', amount:35}]` вместо отдельного точечного
+   * поля `ItemSchema` (альтернатива, которую не выбрали: `healAmount?:
+   * number` рядом с `spoilSec`/`weapon` — общий `effects` уже существовал
+   * на `ItemSchema` пустым массивом и это тот же интерпретатор, которым уже
+   * пользуется остальной контент, лишнее точечное поле было бы дублирующим
+   * путём для одной и той же концепции «эффект предмета»). Интерпретатор
+   * этого файла (`applyEffect`, `game/dialogue/interpreter.ts`) не имеет
+   * доступа к ECS `health`-компоненту героя — там `heal` лишь прибавляет к
+   * плоскому `GameState.hp` (тем же способом, что уже `damage`/`xp`, для
+   * единообразия интерпретатора). Настоящее лечение ECS-героя при
+   * использовании предмета из инвентаря делает `demo-scene.ts` напрямую
+   * поверх `health.hp`/`maxHp` — единственный слой, у которого есть и
+   * `World`, и `ItemRegistry`/`item.effects` одновременно (см.
+   * `useConsumable`, `game/inventory/inventory.ts`).
+   */
+  z.object({ op: z.literal('heal'), amount: z.number().positive() }),
 ]);
 export type Effect = z.infer<typeof EffectSchema>;
 

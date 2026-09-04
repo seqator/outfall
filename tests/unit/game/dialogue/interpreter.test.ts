@@ -168,6 +168,11 @@ describe('interpreter: applyEffect — по одному на каждый ти�
     expect(state.xp).toBe(20);
   });
 
+  it('heal — прибавляет hp (плоский GameState.hp, не ECS-герой — см. докстринг оператора в rules.ts)', () => {
+    const state = applyEffect(createGameState({ hp: 10 }), { op: 'heal', amount: 35 });
+    expect(state.hp).toBe(45);
+  });
+
   it('applyEffects — применяет список по порядку', () => {
     const state = applyEffects(createGameState(), [
       { op: 'setFlag', key: 'flag.a', value: true },

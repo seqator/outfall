@@ -42,6 +42,8 @@ export interface InventoryItemView {
   readonly weightKg: number;
   readonly priceGaiki: number;
   readonly effectText: string;
+  /** `kind: 'consumable'` (аптечка «Бинт» и т.п., OF-058) — показывает кнопку «Использовать» в описании (`render.ts`). */
+  readonly usable: boolean;
   readonly decay?: DecayView;
 }
 
@@ -68,5 +70,7 @@ export interface InventoryHandlers {
   onEquip(uid: string): void;
   onUnequip(slotId: InventorySlotId): void;
   onDrop(uid: string): void;
+  /** Клик «Использовать» по расходнику (`InventoryItemView.usable`, OF-058) — расходует 1 экземпляр стека. */
+  onUse(uid: string): void;
   onClose(): void;
 }

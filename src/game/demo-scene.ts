@@ -92,6 +92,7 @@ import {
   DialogSchema,
   type Dialog,
   type Effect,
+  type Item,
 } from '../data/schemas';
 import { createDomInputSource, type DomInputHandle } from '../input';
 import { clampToMapBounds, createCamera, followTarget } from '../render';
@@ -140,10 +141,12 @@ import {
 } from './world/arena';
 import { createDevTestMap } from './world/dev-fixtures';
 import { resolveEnding, type EndingResult } from './world/endings';
+import { collectNearbyItemPickups, itemPickupFlagKey } from './world/item-pickup';
 import {
   createHero,
   findSpawnPoint,
   loadMapIntoWorld,
+  type LoadedMap,
   toRendererMapData,
 } from './world/map-loader';
 import { createTriggerRunner } from './world/triggers';
@@ -294,6 +297,26 @@ function spawnEnemiesFromMarkers(world: World, enemySpawnEntities: readonly Enti
     spawnEnemy(world, spawnMarker.refId as EnemyDefId, { x: transform.x, y: transform.y });
     world.destroy(marker);
   }
+}
+
+/**
+ * `map.itemPickups[i]` ↔ `loadedMap.itemPickupEntities[i]` — построены
+ * `.map()` в паре, тем же порядком (`world/map-loader.ts:
+ * loadMapIntoWorld`), поэтому zip по индексу безопасен и не требует менять
+ * `map-loader.ts` (вне зоны OF-058) под новое поле в `spawnMarker`. Ключ
+ * результата — `ItemPickup.id` (уникален в пределах одной карты, не
+ * `EntityId`, который меняется при каждой пересборке `loadMapIntoWorld`
+ * внутри `switchMap`) — нужен, чтобы `collectNearbyItemPickups` (чистая
+ * функция, `world/item-pickup.ts`) могла адресовать конкретную точку лута,
+ * не зная о `World`/`EntityId` вовсе.
+ */
+function buildItemPickupEntityMap(gameMap: GameMap, loaded: LoadedMap): Map<string, EntityId> {
+  const byId = new Map<string, EntityId>();
+  gameMap.itemPickups.forEach((pickup, i) => {
+    const entity = loaded.itemPickupEntities[i];
+    if (entity !== undefined) byId.set(pickup.id, entity);
+  });
+  return byId;
 }
 
 function collectFreeTiles(map: GameMap): Array<{ x: number; y: number }> {
@@ -525,6 +548,19 @@ async function loadRawItems(): Promise<readonly unknown[]> {
 const INTERACT_RADIUS = 2;
 
 /**
+ * Радиус, в котором герой автоматически подбирает `itemPickup` карты
+ * (OF-058, `world/item-pickup.ts`) — без отдельной клавиши: `E` уже занята
+ * диалогами/интеракцией NPC (`INTERACT_RADIUS` выше), а лут не требует
+ * подтверждения/диалога, герою достаточно физически дойти (тот же принцип,
+ * что уже применяет переход через `exits[]`, см. `EXIT_RADIUS` ниже).
+ * Значение — тот же порядок величины, что `EXIT_RADIUS`: точки лута на
+ * картах Акта 1/«Трубы» (`public/data/maps/*.json`) стоят на отдельных
+ * клетках, не в открытых залах, более широкий радиус рисковал бы подбирать
+ * предмет раньше, чем игрок вообще увидел бы, что там что-то есть.
+ */
+const ITEM_PICKUP_RADIUS = 0.9;
+
+/**
  * Точка старта игрока `S` и точка панорамной камеры `P` из
  * `docs/levels/01-truba.md` §2 (зона A, "3–8 сек" в таблице первых 60 секунд
  * концепта). `findSpawnPoint` (геометрический центр карты) — не то же самое:
@@ -688,6 +724,13 @@ export async function createDemoScene(
     ? createDevTestMap()
     : await loadMapById(options.initialMapId ?? resolveInitialMapId());
   let loadedMap = loadMapIntoWorld(world, map);
+  // OF-058: `ItemPickup.id` → `EntityId` его `spawnMarker`-метки, для
+  // подбора предметов (см. `buildItemPickupEntityMap` выше и `switchMap`
+  // ниже, где карта пересобирается заново). На первичной загрузке флагов
+  // «уже собрано» ещё нет ни для одной точки лута (`gameState` — новая
+  // игра, определяется ниже) — очистка уже-подобранных пропущена здесь
+  // намеренно, актуальна только при повторном заходе через `switchMap`.
+  let itemPickupEntityById = buildItemPickupEntityMap(map, loadedMap);
   renderer.setMap(toRendererMapData(map));
 
   // Диалоги подгружаются заранее (не по требованию), чтобы открытие диалога
@@ -866,6 +909,32 @@ export async function createDemoScene(
     loop.start();
   }
 
+  /**
+   * Применяет игровые эффекты использованного расходника (OF-058, закрывает
+   * P0-4 баланс-прохода — «лечения не существует физически») к ECS-герою —
+   * единственный обработчик `heal` во всей игре: `game/inventory/**` не
+   * знает о `World` (граница слоёв, докстринг `inventory.ts`), а общий
+   * интерпретатор эффектов (`game/dialogue/interpreter.ts: applyEffect`)
+   * тоже не имеет доступа к ECS (см. докстринг оператора `heal`,
+   * `data/schemas/rules.ts`) — он умеет прибавлять только к плоскому
+   * `GameState.hp`, который эта demo-сцена не использует как реальные ХП
+   * героя. `demo-scene.ts` — единственный слой, у которого есть и
+   * `ItemRegistry`/`item.effects`, и `world.store('health')`, поэтому здесь.
+   * Сумма нескольких `heal`-эффектов одного предмета (гипотетически) —
+   * складывается, лечение капается сверху `health.maxHp` (нельзя вылечить
+   * «про запас» выше максимума).
+   */
+  function applyItemUseEffects(item: Item): void {
+    const healAmount = item.effects.reduce(
+      (sum, effect) => (effect.op === 'heal' ? sum + effect.amount : sum),
+      0,
+    );
+    if (healAmount <= 0) return;
+    const health = world.store('health').get(hero);
+    if (!health) return;
+    health.hp = Math.min(health.maxHp, health.hp + healAmount);
+  }
+
   function openInventory(): void {
     // Сцена Родиона — реалтайм-таймер, который сознательно не ставится на
     // паузу меню (`docs/levels/01-truba.md` §11.2): открыть инвентарь и
@@ -889,6 +958,7 @@ export async function createDemoScene(
       onStateChange(next): void {
         inventoryState = next;
       },
+      onUse: applyItemUseEffects,
       onClose: closeInventory,
     });
   }
@@ -1589,6 +1659,18 @@ export async function createDemoScene(
       map = nextMap;
       hookDialog = nextHookDialog;
       loadedMap = loadMapIntoWorld(world, map);
+      itemPickupEntityById = buildItemPickupEntityMap(map, loadedMap);
+      // OF-058: если герой уже подбирал точку лута этой карты в прошлый
+      // визит (`gameState.flags`, ключ `itemPickupFlagKey`), её свежая
+      // `spawnMarker`-метка (только что созданная `loadMapIntoWorld` выше,
+      // она ничего не знает про историю визитов) сносится сразу — иначе
+      // предмет молча ждал бы следующего прохода героя мимо и подбирался
+      // бы второй раз (флаг блокирует повторный `addItem` в
+      // `collectNearbyItemPickups`, но не сам факт, что нетронутая метка
+      // осталась бы висеть в мире).
+      for (const [pickupId, entity] of itemPickupEntityById) {
+        if (gameState.flags[itemPickupFlagKey(map.id, pickupId)] === true) world.destroy(entity);
+      }
       renderer.setMap(toRendererMapData(map));
       triggerRunner = createTriggerRunner(map);
       // См. ДОПУЩЕНИЕ у начального спавна dev-room/Акта 1 выше: без
@@ -1668,6 +1750,31 @@ export async function createDemoScene(
     renderer.draw(world, camera, alpha);
 
     if (heroTransform && !devRoom && !activeDialogue && !mapTransitionPending) {
+      // Подбор предметов (OF-058, `world/item-pickup.ts`, закрывает P0-4/
+      // P2-1 баланс-прохода): раньше проверки exit/триггеров — герой может
+      // одновременно стоять и рядом с точкой лута, и рядом с дверью/
+      // триггером, оба должны сработать в один и тот же кадр (в отличие от
+      // exit/триггеров ниже, которые исключают друг друга через `else`).
+      const pickupResult = collectNearbyItemPickups({
+        pickups: map.itemPickups,
+        heroPosition: { x: heroTransform.x, y: heroTransform.y },
+        radius: ITEM_PICKUP_RADIUS,
+        mapId: map.id,
+        flags: gameState.flags,
+        inventoryState,
+        registry: itemRegistry,
+        nextUid: nextDevUid,
+      });
+      if (pickupResult.collectedIds.length > 0) {
+        inventoryState = pickupResult.inventoryState;
+        gameState = { ...gameState, flags: pickupResult.flags };
+        activeInventory?.update(inventoryState);
+        for (const pickupId of pickupResult.collectedIds) {
+          const entity = itemPickupEntityById.get(pickupId);
+          if (entity !== undefined) world.destroy(entity);
+        }
+      }
+
       // Переход между картами (OF-051) проверяется раньше триггеров текущей
       // карты и, если сработал, полностью замещает обработку триггеров на
       // этот кадр — герой стоит у двери, а не одновременно и у двери, и в
