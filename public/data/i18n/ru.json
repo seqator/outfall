@@ -21,7 +21,7 @@
   "enemy.raki.weakness.name": "Раскрытое брюшко",
 
   "dialog.prolog_smotritel.start": "Вода пошла — Плотина спускает сброс. Шевелись, не в первый раз ныряешь.",
-  "dialog.prolog_smotritel.choice.yazyk": "[Язык 5] Не учи учёного — я и без соплей разберусь.",
+  "dialog.prolog_smotritel.choice.yazyk": "Не учи учёного — я и без соплей разберусь.",
   "dialog.prolog_smotritel.choice.default": "Понял. Иду к решётке.",
   "dialog.prolog_smotritel.choice.tupoy": "Вода. Она мокрая. Я помню с прошлого раза.",
 

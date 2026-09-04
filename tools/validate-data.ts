@@ -376,6 +376,18 @@ export function validateDataDir(dataDir: string): ValidationResult {
       node.choices.forEach((choice, i) => {
         const choiceField = `${nodeField}.choices[${i}]`;
         checkI18n(choice.textKey, file, `${choiceField}.textKey`);
+        // `formatCheckLabel` (`src/game/dialogue/check-labels.ts`) уже
+        // рисует `[Навык N]` перед репликой для любого варианта с `check` —
+        // если контентная строка САМА начинается с `[`, ярлык печатается
+        // дважды (найдено вживую в `docs/planerka/03-vs/duxa-review-vs-2.md`,
+        // кринж-лист №1: «[Язык 5] [Язык 5] Не учи учёного…»). Проверка
+        // держит это правило для всего будущего контента (OF-032+).
+        if (choice.check && ruDict?.[choice.textKey]?.trimStart().startsWith('[')) {
+          issues.push({
+            file,
+            message: `${choiceField}.textKey → текст "${choice.textKey}" начинается с "[", а ярлык проверки уже рисуется автоматически (formatCheckLabel) — уберите ручной ярлык из i18n-строки`,
+          });
+        }
         if (choice.condition) checkConditionRefs(choice.condition, file, `${choiceField}.condition`);
         choice.effects.forEach((effect, j) => checkEffect(effect, file, `${choiceField}.effects[${j}]`));
       });

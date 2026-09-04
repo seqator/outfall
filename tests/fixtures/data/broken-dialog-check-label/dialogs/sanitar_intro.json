@@ -1,0 +1,25 @@
+{
+  "id": "dialog.sanitar_intro",
+  "npc": "npc.sanitar",
+  "start": "greet",
+  "nodes": {
+    "greet": {
+      "speaker": "npc.sanitar",
+      "textKey": "dialog.sanitar_intro.greet",
+      "choices": [
+        {
+          "textKey": "dialog.sanitar_intro.choice.ok",
+          "next": null,
+          "check": { "stat": "yazyk", "dc": 5 },
+          "effects": [{ "op": "startQuest", "quest": "quest.pervyj_nyrok" }]
+        },
+        { "textKey": "dialog.sanitar_intro.choice.ask", "next": "ask" }
+      ]
+    },
+    "ask": {
+      "speaker": "npc.sanitar",
+      "textKey": "dialog.sanitar_intro.ask",
+      "choices": [{ "textKey": "dialog.sanitar_intro.choice.back", "next": "greet" }]
+    }
+  }
+}

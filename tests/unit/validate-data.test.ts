@@ -14,6 +14,8 @@
  *   `broken-quest-item-ref/`     — quest → item: условие hasItem на несуществующий предмет
  *   `broken-perk-i18n-ref/`      — perk → i18n: nameKey отсутствует в ru.json
  *   `broken-i18n-missing-key/`   — dialog → i18n: textKey отсутствует в ru.json
+ *   `broken-dialog-check-label/` — dialog → i18n: у choice с `check` текст сам
+ *                                   начинается с "[" (дублирует автоярлык formatCheckLabel)
  * Каждая фикстура — копия `valid/` с ровно одним намеренно битым полем, так
  * что валидатор обязан вернуть ровно одну релевантную ошибку.
  */
@@ -78,6 +80,10 @@ describe('validate-data: битые кросс-ссылки', () => {
       dir: 'broken-i18n-missing-key',
       messageIncludes:
         'i18n-ключ "dialog.sanitar_intro.greet_missing" отсутствует в i18n/ru.json',
+    },
+    {
+      dir: 'broken-dialog-check-label',
+      messageIncludes: 'ярлык проверки уже рисуется автоматически (formatCheckLabel)',
     },
   ];
 

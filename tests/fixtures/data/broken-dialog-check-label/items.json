@@ -1,0 +1,31 @@
+[
+  {
+    "id": "item.pistol_ogryzok",
+    "nameKey": "item.pistol_ogryzok.name",
+    "descKey": "item.pistol_ogryzok.desc",
+    "kind": "weapon",
+    "weight": 1.2,
+    "value": 120,
+    "stack": 1,
+    "weapon": {
+      "branch": "guns",
+      "damage": 8,
+      "rateMs": 250,
+      "magazine": 8,
+      "reloadMs": 1200,
+      "spreadDeg": 6,
+      "ammo": "item.ammo_pistol"
+    },
+    "effects": []
+  },
+  {
+    "id": "item.ammo_pistol",
+    "nameKey": "item.ammo_pistol.name",
+    "descKey": "item.ammo_pistol.desc",
+    "kind": "ammo",
+    "weight": 0.01,
+    "value": 2,
+    "stack": 40,
+    "effects": []
+  }
+]

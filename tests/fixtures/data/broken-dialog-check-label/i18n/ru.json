@@ -1,0 +1,21 @@
+{
+  "item.pistol_ogryzok.name": "Пистолет «Огрызок»",
+  "item.pistol_ogryzok.desc": "Лёгкий пистолет под патрон 9 мм, единственное оружие среза, из которого можно стрелять на бегу почти без потери точности.",
+  "item.ammo_pistol.name": "Патроны 9 мм",
+  "item.ammo_pistol.desc": "Горсть патронов для «Огрызка».",
+  "perk.bystrye_ruki.name": "Быстрые руки",
+  "perk.bystrye_ruki.desc": "Перезарядка −25%; смена оружия мгновенная.",
+  "enemy.raki.name": "Раки",
+  "enemy.raki.attack.name": "Хватка клешнёй",
+  "enemy.raki.weakness.name": "Раскрытое брюшко",
+  "quest.pervyj_nyrok.title": "Первый нырок",
+  "quest.pervyj_nyrok.stage.start": "Найти пистолет в Трубе.",
+  "quest.pervyj_nyrok.stage.done": "Выбраться из коллектора.",
+  "map.truba.name": "Труба",
+  "npc.sanitar.name": "Санитар",
+  "dialog.sanitar_intro.greet": "Стой. Кто такой, чего в Трубе забыл?",
+  "dialog.sanitar_intro.ask": "Задвижку тридцать лет не трогали — и не тронем.",
+  "dialog.sanitar_intro.choice.ok": "[Уйти] Понял, не мешаю.",
+  "dialog.sanitar_intro.choice.ask": "Что за задвижка?",
+  "dialog.sanitar_intro.choice.back": "Ладно, проехали."
+}
