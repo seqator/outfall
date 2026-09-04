@@ -39,12 +39,40 @@
  * реалтайм-оверлей поверх геймплея (не модальный диалог), держать `E` 6с —
  * «вытащить», нажать `F` — «снять ключ», бездействие/таймаут — честный
  * форс-исход «ключ». Реализация ниже — блок «Сцена Родиона».
+ *
+ * OF-051 обобщает загрузку карты на весь Акт 1 (`map.garazhi`/`map.plotina`/
+ * `map.paneli`, OF-033) поверх «Трубы», ничего в поведении «Трубы» не меняя:
+ * `loadMapById` подгружает произвольный `map.*` по `id → /data/maps/<slug>
+ * .json` (`loadRealTrubaMap` до этой правки грузил только «Трубу» — теперь
+ * это тот же самый вызов с параметром); NPC → диалог (`NPC_DIALOG_FILES`)
+ * дополнен пятью NPC Акта 1 (`docs/narrative/quests/act1-derzost.md`, файлы
+ * `public/data/dialogs/act1-*.json`); переход между картами — по `exits[]`
+ * карты (`MapSchema.exits`, OF-009), геометрия — вплотную к точке выхода
+ * (`EXIT_RADIUS`), реализация — `switchMap`/`findNearbyExit`/
+ * `resolveEntryPoint` ниже. «Труба»-специфика (панорама, `TRUBA_START_POINT`,
+ * крючок пролога T6, сцена Родиона T4/T5) остаётся активной только когда
+ * загружена именно `map.truba` — карты Акта 1 физически не содержат этих
+ * триггеров/NPC в своих JSON, так что реакция по `triggerResult.firedIds`
+ * естественным образом не срабатывает на других картах без явных доп.
+ * проверок. Прямой заход в конкретную карту — `?map=<slug>` в URL (например
+ * `?map=garazhi`); без параметра сцена стартует как раньше — с «Трубы».
+ * Полноценного экрана выбора локации в этой волне нет (см. `docs/BACKLOG.md`
+ * OF-051) — граф локаций уже полностью проходим через `exits[]` каждой
+ * карты, отдельное меню — не критерий готовности задачи.
  */
 
 import { createAudioEngine, type AudioEngine } from '../audio';
 import { createEventBus, createLoop, createSeededRng, createWorld } from '../core';
 import type { EntityId, World } from '../core/world';
-import { MapSchema, type GameMap, DialogSchema, type Dialog, type Effect } from '../data/schemas';
+import {
+  MapSchema,
+  type GameMap,
+  type MapExit,
+  type Vector2,
+  DialogSchema,
+  type Dialog,
+  type Effect,
+} from '../data/schemas';
 import { createDomInputSource, type DomInputHandle } from '../input';
 import { clampToMapBounds, createCamera, followTarget } from '../render';
 import { PixiRenderer } from '../render/pixi';
@@ -122,6 +150,8 @@ declare global {
       getEnemyCount(): number;
       /** Значение флага `gameState` (диалоги/сцена Родиона) — для e2e-проверки исхода сцены выбора (`tests/e2e/rodion-scene.spec.ts`), не требует парсить текст HUD. */
       getFlag(key: string): boolean | number | string | undefined;
+      /** Id текущей загруженной карты (`GameMap.id`, напр. `map.garazhi`) — для e2e-теста перехода между картами (`tests/e2e/act1-transition.spec.ts`, OF-051), подтверждает `switchMap` без парсинга HUD/скриншота. */
+      getMapId(): string;
     };
   }
 }
@@ -233,21 +263,39 @@ function isDevRoomMode(): boolean {
   return new URLSearchParams(window.location.search).get('devroom') === '1';
 }
 
-/** Реальная локация грузится как статические данные (`public/data`), не бандлится — `MapSchema.parse` не доверяет содержимому файла вслепую. */
-async function loadRealTrubaMap(): Promise<GameMap> {
-  const res = await fetch('/data/maps/truba.json');
-  if (!res.ok) throw new Error(`demo-scene: не удалось загрузить карту «Труба» (${String(res.status)})`);
+/**
+ * Реальная локация грузится как статические данные (`public/data`), не
+ * бандлится — `MapSchema.parse` не доверяет содержимому файла вслепую.
+ * `mapId` — полный намespaced id (`map.truba`, `map.garazhi`, …), файл —
+ * `<id без "map.">.json` (level-designer, OF-014/025/033: слаг файла всегда
+ * равен хвосту id).
+ */
+async function loadMapById(mapId: string): Promise<GameMap> {
+  const slug = mapId.startsWith('map.') ? mapId.slice('map.'.length) : mapId;
+  const res = await fetch(`/data/maps/${slug}.json`);
+  if (!res.ok) throw new Error(`demo-scene: не удалось загрузить карту «${mapId}» (${String(res.status)})`);
   return MapSchema.parse(await res.json());
 }
 
 /**
- * NPC карты «Труба» (`npcs[].id` в `public/data/maps/truba.json`) → файл
- * диалога в `public/data/dialogs/`. `npc.serega_sachok` задокументирован в
- * `docs/levels/01-truba.md` §1 как «первая шутка игры», но диалога не имел
- * (`duxa-review-vs.md`, кринж-лист №5: «первая шутка игры — отсутствует
- * физически») — `prolog-serega.json` закрывает это одной репликой в его
- * голосе из `world-bible.md` §2.1 («балагур, называет раков крупными и
- * мелкими, как на рынке»).
+ * `?map=<slug|map.slug>` — прямой заход на конкретную карту, без пешего
+ * прохождения графа `exits[]` от «Трубы» (например, `?map=garazhi` для
+ * ручной проверки Акта 1 без прогона всего пролога). Без параметра — как и
+ * до OF-051, сцена стартует с «Трубы» (`map.truba`).
+ */
+function resolveInitialMapId(): string {
+  const raw = new URLSearchParams(window.location.search).get('map');
+  if (!raw) return 'map.truba';
+  return raw.startsWith('map.') ? raw : `map.${raw}`;
+}
+
+/**
+ * NPC (`npcs[].id` любой карты) → файл диалога в `public/data/dialogs/`.
+ * `npc.serega_sachok` задокументирован в `docs/levels/01-truba.md` §1 как
+ * «первая шутка игры», но диалога не имел (`duxa-review-vs.md`, кринж-лист
+ * №5: «первая шутка игры — отсутствует физически») — `prolog-serega.json`
+ * закрывает это одной репликой в его голосе из `world-bible.md` §2.1
+ * («балагур, называет раков крупными и мелкими, как на рынке»).
  *
  * `npc.rodion` сюда намеренно не входит: раньше `E` открывал обычный
  * диалог `prolog-vybor.json` (модальное меню на два пункта без давления
@@ -256,16 +304,58 @@ async function loadRealTrubaMap(): Promise<GameMap> {
  * `prolog-vybor.json` остаётся на диске нетронутым — это фикстура
  * регрессионного снапшот-теста `dialog-runner.test.ts` на обход графа
  * диалога, просто больше не используется рантаймом демо-сцены.
+ *
+ * OF-051 (Акт 1, `public/data/dialogs/act1-*.json`, сверено с `.npc` полем
+ * каждого файла и расстановкой NPC на картах `public/data/maps/{garazhi,
+ * plotina,paneli}.json`): пять NPC c диалогом — `npc.grinya`/`npc.tolya`
+ * («Отработка»), `npc.emissary_chistyh` («Для колодца»), `npc.modest_
+ * busygin` («Рубильник»), `npc.palych` («Я кран»). Остальные NPC карт Акта 1
+ * (`npc.zoya`, `npc.klavdiya_busygina`, `npc.batya_kot`, `npc.dyadya_gena`,
+ * `npc.pereskazchik`, `npc.timofey_rzhavyy`, `npc.tetya_valya`) названы в
+ * `docs/narrative/main-quest.md`/`world-bible.md`, но диалоговых сцен под них
+ * ещё не написано (`quest.med_dlya_semyorki`/`quest.tolya_chto_dalshe`/
+ * `quest.schetchik_i_sovest` в `quests.json` пока без диалогов, только
+ * эффекты стадий) — они сознательно «немые»: видны на карте, `E` рядом с
+ * ними не находит запись в этом словаре и просто не открывает диалог (см.
+ * `findNearestInteractableNpc` ниже — `dialogsByNpcId.get` вернёт `undefined`
+ * и кандидат пропускается). Это честная граница контента этой волны, не
+ * баг OF-051.
  */
 const NPC_DIALOG_FILES: Readonly<Record<string, string>> = {
   'npc.sanitar': 'prolog-smotritel',
   'npc.serega_sachok': 'prolog-serega',
+  'npc.grinya': 'act1-otrabotka-grinya',
+  'npc.tolya': 'act1-otrabotka-tolya',
+  'npc.emissary_chistyh': 'act1-dlya-kolodtsa',
+  'npc.modest_busygin': 'act1-rubilnik',
+  'npc.palych': 'act1-ya-kran',
 };
 
 async function loadDialog(fileName: string): Promise<Dialog> {
   const res = await fetch(`/data/dialogs/${fileName}.json`);
   if (!res.ok) throw new Error(`demo-scene: не удалось загрузить диалог «${fileName}» (${String(res.status)})`);
   return DialogSchema.parse(await res.json());
+}
+
+/**
+ * Подгружает (и кэширует в `cache`, общий на всю сессию — id NPC уникальны
+ * по всем картам, `NpcSpawnSchema` докстринг) диалоги только тех NPC, что
+ * реально стоят на переданной карте и имеют запись в `NPC_DIALOG_FILES` —
+ * не весь словарь целиком: карта Акта 1 не должна тянуть диалог «Трубы» и
+ * наоборот.
+ */
+async function loadDialogsForMap(map: GameMap, cache: Map<string, Dialog>): Promise<void> {
+  // Параллельно (`Promise.all`), не по одному файлу за раз: карта Акта 1
+  // может завести сразу несколько NPC с диалогом (например «Панели» —
+  // Дядя Толя и Эмиссар Чистых), а последовательные `await` в цикле
+  // складывали бы задержки round-trip'ов друг на друга — заметно на
+  // переходе между картами (`switchMap`), где игрок ждёт прямо во время
+  // геймплея, а не на загрузке экрана.
+  const toLoad = map.npcs
+    .filter((npc) => !cache.has(npc.id) && NPC_DIALOG_FILES[npc.id] !== undefined)
+    .map((npc) => ({ npcId: npc.id, fileName: NPC_DIALOG_FILES[npc.id] as string }));
+  const dialogs = await Promise.all(toLoad.map((entry) => loadDialog(entry.fileName)));
+  toLoad.forEach((entry, i) => cache.set(entry.npcId, dialogs[i] as Dialog));
 }
 
 /** `createItemRegistry` сам валидирует каждую запись по `ItemSchema` — здесь только сырой JSON. */
@@ -291,6 +381,46 @@ const TRUBA_PANORAMA_POINT = { x: 30, y: 2 };
 const PANORAMA_DURATION_MS = 4000;
 const PANORAMA_ZOOM = 1.1;
 const GAMEPLAY_ZOOM = 1.5;
+
+/**
+ * Радиус, в котором герой у `MapExit.position` запускает переход на другую
+ * карту (`switchMap`, OF-051) — без отдельного `[E]`, так же, как дверь.
+ * `MapExit` не несёт своего `radius` (`src/data/schemas/map.ts`), поэтому
+ * берём фиксированное значение чуть меньше `INTERACT_RADIUS`: выходы стоят
+ * на одиночных проходимых клетках коридоров (не открытых залах), более
+ * широкий радиус рисковал бы срабатывать раньше, чем герой физически дошёл
+ * до двери.
+ */
+const EXIT_RADIUS = 0.9;
+
+/**
+ * Точка появления героя на целевой карте после перехода через `exit`
+ * (OF-051). `MapExit.toSpawnId` — опциональное поле, «соответствие точке
+ * спавна там не проверяется» (докстринг `MapExitSchema`), ни у одного
+ * реального `exit` в контенте Акта 1 оно не выставлено — решение по
+ * дефолту:
+ *  1. Если `toSpawnId` задан — трактуем его как id другого `exit` этой же
+ *     целевой карты (единственный вид «именованной точки» в схеме сегодня)
+ *     и высаживаем героя там.
+ *  2. Иначе ищем на целевой карте свой `exit`, ведущий обратно на карту, с
+ *     которой мы уходим (`toMap === fromMapId`) — «зеркало» входа: герой
+ *     выходит из тех же дверей, через которые вошёл бы, если бы шёл
+ *     навстречу. Ровно так level-designer и связал граф (`garazhi.
+ *     exit_to_plotina(33,15)` ↔ `plotina.exit_to_garazhi(8,16)` и т.д.).
+ *  3. Иначе (на «Трубу» ведущих `exit`'ов обратно нет — там единственный
+ *     `exit_to_river` замкнут сам на себя) — `TRUBA_START_POINT` для
+ *     «Трубы» или геометрический центр карты (`findSpawnPoint`) для прочих.
+ */
+function resolveEntryPoint(targetMap: GameMap, exit: MapExit, fromMapId: string): Vector2 {
+  if (exit.toSpawnId !== undefined) {
+    const named = targetMap.exits.find((candidate) => candidate.id === exit.toSpawnId);
+    if (named) return named.position;
+  }
+  const reciprocal = targetMap.exits.find((candidate) => candidate.toMap === fromMapId);
+  if (reciprocal) return reciprocal.position;
+  if (targetMap.id === 'map.truba') return TRUBA_START_POINT;
+  return findSpawnPoint(targetMap);
+}
 
 /** Через сколько игрок возрождается после смерти — `docs/qa/vs-report.md` P0 «смерть без обратной связи»: без этого герой замирает навсегда. */
 const RESPAWN_DELAY_MS = 2500;
@@ -337,23 +467,29 @@ export async function createDemoScene(
   const audioEngine: AudioEngine = createAudioEngine(events);
 
   const devRoom = isDevRoomMode();
-  const map = devRoom ? createDevTestMap() : await loadRealTrubaMap();
-  const loadedMap = loadMapIntoWorld(world, map);
+  // `let`, не `const`: OF-051 переключает карту рантаймом (`switchMap` ниже,
+  // по `exits[]`), поэтому `map`/`loadedMap` — держатели текущей загруженной
+  // локации, не разовое значение на всю жизнь сцены.
+  let map = devRoom ? createDevTestMap() : await loadMapById(resolveInitialMapId());
+  let loadedMap = loadMapIntoWorld(world, map);
   renderer.setMap(toRendererMapData(map));
 
   // Диалоги подгружаются заранее (не по требованию), чтобы открытие диалога
-  // при взаимодействии было мгновенным — их всего два, это дёшево.
+  // при взаимодействии было мгновенным. Загружаем только диалоги NPC именно
+  // ЭТОЙ карты (`loadDialogsForMap`) — при переходе на другую карту `switchMap`
+  // дозагружает недостающие в тот же общий `dialogsByNpcId`.
   const dialogsByNpcId = new Map<string, Dialog>();
   let hookDialog: Dialog | null = null;
   if (!devRoom) {
-    for (const [npcId, fileName] of Object.entries(NPC_DIALOG_FILES)) {
-      dialogsByNpcId.set(npcId, await loadDialog(fileName));
-    }
+    await loadDialogsForMap(map, dialogsByNpcId);
     // Крючок пролога (T6, «Глава 1. Труба») — не привязан ни к одному NPC,
-    // открывается автоматически по триггеру (см. ниже). До этой правки файл
-    // существовал, проходил `validate`, но был физически недостижим в игре
-    // (`docs/planerka/03-vs/duxa-review-vs.md`, кринж-лист №3).
-    hookDialog = await loadDialog('prolog-kruchok');
+    // открывается автоматически по триггеру (см. ниже), только на «Трубе» —
+    // карты Акта 1 не содержат `trigger_t6`, так что это условие никогда не
+    // сработает на них само по себе, но файл всё равно грузим только когда
+    // нужен. До этой правки файл существовал, проходил `validate`, но был
+    // физически недостижим в игре (`docs/planerka/03-vs/duxa-review-vs.md`,
+    // кринж-лист №3).
+    if (map.id === 'map.truba') hookDialog = await loadDialog('prolog-kruchok');
   }
 
   // Локализация (OF-019/025): без неё диалоговый UI и HUD показывают сырые
@@ -373,11 +509,14 @@ export async function createDemoScene(
   const armorSlots: ArmorSlotTable = new Map();
 
   // Точка старта — геометрический центр карты `findSpawnPoint(map)` подходит
-  // только для карт без сюжетной постановки (dev-room); настоящая «Труба»
+  // только для карт без сюжетной постановки (dev-room и любая карта Акта 1
+  // при прямом заходе через `?map=`, минуя `exits[]`); настоящая «Труба»
   // начинается в зоне A (`TRUBA_START_POINT`, см. докстринг константы) — это
   // прямое исправление P0 из `docs/qa/vs-report.md` («герой стартует в
-  // центре арены боя, минуя весь пролог»).
-  const spawn = devRoom ? findSpawnPoint(map) : TRUBA_START_POINT;
+  // центре арены боя, минуя весь пролог»). `let`: `switchMap` переставляет
+  // героя на точку появления новой карты (`resolveEntryPoint`) — это то же
+  // самое поле, что читает автовозрождение на смерть ниже.
+  let spawn: Vector2 = devRoom ? findSpawnPoint(map) : map.id === 'map.truba' ? TRUBA_START_POINT : findSpawnPoint(map);
   const hero = createHero(world, spawn);
   attachCombatComponents(world, hero);
 
@@ -400,8 +539,12 @@ export async function createDemoScene(
   // `hero-movement.spec.ts`/`stress.spec.ts` рассчитаны именно на это. На
   // настоящей «Трубе» волна врагов спавнится по триггеру T3 (см. цикл кадра
   // ниже) — рецензия поймала, что раки стояли на карте с момента загрузки,
-  // а не «выходили по сценарию» (`duxa-review-vs.md`, замечание 6).
-  if (devRoom) {
+  // а не «выходили по сценарию» (`duxa-review-vs.md`, замечание 6). Карты
+  // Акта 1 (OF-033, например `enemySpawns` «Панелей» — двое Подлинейных) не
+  // размечают собственных сценарных триггеров-волн, как «Труба» — ДОПУЩЕНИЕ
+  // OF-051: без выделенного триггера спавн на этих картах происходит сразу
+  // по загрузке, тем же путём, что и dev-room.
+  if (devRoom || map.id !== 'map.truba') {
     spawnEnemiesFromMarkers(world, loadedMap.enemySpawnEntities);
   }
 
@@ -747,20 +890,144 @@ export async function createDemoScene(
   // отдать камеру игроку. До этой правки её не было вообще: клик «Погнали»
   // сразу ставил камеру на героя в произвольной точке карты
   // (`duxa-review-vs.md` п.1, «угол коробки вместо панорамы», OF-047).
-  const camera = devRoom
-    ? createCamera({ x: spawn.x, y: spawn.y, zoom: GAMEPLAY_ZOOM })
-    : createCamera({ x: TRUBA_PANORAMA_POINT.x, y: TRUBA_PANORAMA_POINT.y, zoom: PANORAMA_ZOOM });
-  let panoramaUntilMs: number | null = devRoom ? null : performance.now() + PANORAMA_DURATION_MS;
+  // OF-051: панорама — часть именно самого первого захода в игру на «Трубе»
+  // (сценарий "Погнали" → пролог), не переигрывается при повторном заходе на
+  // «Трубу» через `exits[]` (`switchMap` ниже сознательно не трогает
+  // `panoramaUntilMs`) — это происходит один раз здесь, при первичной
+  // загрузке сцены.
+  const isInitialTruba = !devRoom && map.id === 'map.truba';
+  const camera = isInitialTruba
+    ? createCamera({ x: TRUBA_PANORAMA_POINT.x, y: TRUBA_PANORAMA_POINT.y, zoom: PANORAMA_ZOOM })
+    : createCamera({ x: spawn.x, y: spawn.y, zoom: GAMEPLAY_ZOOM });
+  let panoramaUntilMs: number | null = isInitialTruba ? performance.now() + PANORAMA_DURATION_MS : null;
 
-  // Триггеры карты (T1–T6, `public/data/maps/truba.json`) — до этой правки
-  // лежали в данных мёртвым грузом (`duxa-review-vs.md` п.3): ни подсказки
-  // управления, ни волны врагов по сценарию, ни крючка пролога. `devRoom`
-  // не участвует — там `map.triggers` пуст, раннер там холостой.
-  const triggerRunner = createTriggerRunner(map);
+  // Триггеры карты (T1–T6 на «Трубе», плюс общие checkpoint/available-флаги
+  // на картах Акта 1, `public/data/maps/*.json`) — до OF-049 лежали в данных
+  // мёртвым грузом (`duxa-review-vs.md` п.3): ни подсказки управления, ни
+  // волны врагов по сценарию, ни крючка пролога. `devRoom` не участвует —
+  // там `map.triggers` пуст, раннер там холостой. `let`: `switchMap`
+  // пересоздаёт раннер под новую карту — триггеры одной локации не должны
+  // проверяться на геометрии другой.
+  let triggerRunner = createTriggerRunner(map);
   let hintUntilMs: number | null = null;
   let heroDeadSinceMs: number | null = null;
+  /** Идёт ли прямо сейчас переход между картами (`switchMap`) — защита от повторного запуска, пока предыдущий переход ещё грузится. */
+  let mapTransitionPending = false;
+  /**
+   * Пока не `null` — точка на карте, в радиусе которой `exits[]` не
+   * проверяются вообще. `resolveEntryPoint` (см. её докстринг выше)
+   * намеренно высаживает героя РОВНО на клетке зеркального `exit` целевой
+   * карты (`plotina.exit_to_garazhi` и т.п., расстояние 0) — без этой
+   * защиты следующий же кадр немедленно нашёл бы этот `exit` в
+   * `EXIT_RADIUS` и запустил переход назад, откуда герой только что пришёл,
+   * бесконечным пинг-понгом. Позиционная (не временная) защита: снимается,
+   * как только герой физически выходит из `EXIT_RADIUS` этой точки — герой
+   * волен стоять сколько угодно, не отброшен обратно ни через секунду, ни
+   * через десять.
+   */
+  let suppressedExitPosition: Vector2 | null = null;
 
   const fpsOverlay = createFpsOverlay(root);
+
+  /** Ищет `exit` текущей карты в радиусе героя (`EXIT_RADIUS`) — раз в кадр, тем же приёмом, что и триггеры ниже. */
+  function findNearbyExit(heroX: number, heroY: number): MapExit | null {
+    for (const exit of map.exits) {
+      const dx = exit.position.x - heroX;
+      const dy = exit.position.y - heroY;
+      if (dx * dx + dy * dy <= EXIT_RADIUS * EXIT_RADIUS) return exit;
+    }
+    return null;
+  }
+
+  /**
+   * Переход на другую карту через `exit` (OF-051, `MapSchema.exits`). Сносит
+   * сущности старой карты (стены/`spawnMarker`-метки NPC-врагов-предметов/
+   * сетку коллизии) и всех живых врагов/снарядов текущей боевой сцены — они
+   * принадлежат старой локации и не должны «утекать» на новую вместе с
+   * игроком. Герой (health/weapons/perks/progression — всё, что висит на
+   * его `EntityId`, плюс инвентарь/флаги квестов в замыкании сцены) не
+   * пересоздаётся и не трогается — это тот же самый герой, просто в другом
+   * месте.
+   *
+   * `exit.toMap === map.id` (сегодня — только `truba.exit_to_river(30,61)`)
+   * — самоссылающийся `exit`, трактуем как инертную заглушку конца пролога
+   * и НЕ переходим: без этого условия герой в радиусе `EXIT_RADIUS` от такой
+   * точки телепортировался бы «на ту же карту» в бесконечном цикле каждый
+   * кадр. Level-designer не связал его никуда дальше — задание задачи прямо
+   * разрешает не трогать этот случай, см. отчёт OF-051.
+   */
+  async function switchMap(exit: MapExit): Promise<void> {
+    if (exit.toMap === map.id || mapTransitionPending) return;
+    mapTransitionPending = true;
+    loop.stop();
+    try {
+      const fromMapId = map.id;
+      const nextMap = await loadMapById(exit.toMap);
+      // Сетевая часть (карта + диалоги новых NPC) — вся ДО того, как мир
+      // вообще тронут: герой в этот момент ещё физически стоит на старой
+      // карте, `map`/`loadedMap`/`getMapId()` снаружи всё ещё указывают на
+      // неё. Иначе (если грузить диалоги уже ПОСЛЕ переключения `map`)
+      // возникало бы рассинхронизированное окно — карта формально уже
+      // новая, а диалоги её NPC ещё не пришли, и `[E]` рядом с ними не
+      // работает несколько кадров/секунд без видимой причины снаружи.
+      let nextHookDialog = hookDialog;
+      if (nextMap.id === 'map.truba' && !nextHookDialog) nextHookDialog = await loadDialog('prolog-kruchok');
+      await loadDialogsForMap(nextMap, dialogsByNpcId);
+
+      for (const entity of loadedMap.wallEntities) world.destroy(entity);
+      for (const entity of loadedMap.npcEntities) world.destroy(entity);
+      for (const entity of loadedMap.enemySpawnEntities) world.destroy(entity);
+      for (const entity of loadedMap.itemPickupEntities) world.destroy(entity);
+      world.destroy(loadedMap.mapEntity);
+      for (const entity of [...world.query('enemy')]) world.destroy(entity);
+      for (const entity of [...world.query('projectile')]) world.destroy(entity);
+
+      map = nextMap;
+      hookDialog = nextHookDialog;
+      loadedMap = loadMapIntoWorld(world, map);
+      renderer.setMap(toRendererMapData(map));
+      triggerRunner = createTriggerRunner(map);
+      // См. ДОПУЩЕНИЕ у начального спавна dev-room/Акта 1 выше: без
+      // сценарной волны (как T3 на «Трубе») спавним по факту загрузки карты.
+      if (map.id !== 'map.truba') spawnEnemiesFromMarkers(world, loadedMap.enemySpawnEntities);
+
+      spawn = resolveEntryPoint(map, exit, fromMapId);
+      const heroTransform = world.store('transform').get(hero);
+      if (heroTransform) {
+        heroTransform.x = spawn.x;
+        heroTransform.y = spawn.y;
+        heroTransform.prevX = spawn.x;
+        heroTransform.prevY = spawn.y;
+      }
+      const heroVelocity = world.store('velocity').get(hero);
+      if (heroVelocity) {
+        heroVelocity.vx = 0;
+        heroVelocity.vy = 0;
+      }
+
+      followTarget(camera, spawn.x, spawn.y);
+      camera.zoom = GAMEPLAY_ZOOM;
+      clampToMapBounds(camera, map.width, map.height);
+      // Переходы между картами никогда не показывают панораму заново — она
+      // принадлежит только самому первому запуску сцены (см. `isInitialTruba`
+      // выше), и HUD-подсказка WASD (T1) тоже не переносится на новую карту.
+      panoramaUntilMs = null;
+      hintUntilMs = null;
+      // См. докстринг `suppressedExitPosition`: подавляем `exits[]` новой
+      // карты, если герой высадился в радиусе одного из них (обычно —
+      // зеркальный `exit`, найденный `resolveEntryPoint`), пока не отойдёт.
+      suppressedExitPosition = map.exits.some((candidate) => {
+        const dx = candidate.position.x - spawn.x;
+        const dy = candidate.position.y - spawn.y;
+        return dx * dx + dy * dy <= EXIT_RADIUS * EXIT_RADIUS;
+      })
+        ? { x: spawn.x, y: spawn.y }
+        : null;
+    } finally {
+      mapTransitionPending = false;
+      loop.start();
+    }
+  }
 
   const unsubscribeFrame = loop.onFrame((alpha, frameDtMs) => {
     const now = performance.now();
@@ -791,39 +1058,53 @@ export async function createDemoScene(
 
     renderer.draw(world, camera, alpha);
 
-    if (heroTransform && !devRoom && !activeDialogue) {
-      const triggerResult = triggerRunner.update(heroTransform.x, heroTransform.y, gameState);
-      gameState = triggerResult.state;
-      if (triggerResult.firedIds.includes('trigger_t1')) hintUntilMs = now + 6000;
-      if (triggerResult.firedIds.includes('trigger_t3')) {
-        spawnEnemiesFromMarkers(world, loadedMap.enemySpawnEntities);
+    if (heroTransform && !devRoom && !activeDialogue && !mapTransitionPending) {
+      // Переход между картами (OF-051) проверяется раньше триггеров текущей
+      // карты и, если сработал, полностью замещает обработку триггеров на
+      // этот кадр — герой стоит у двери, а не одновременно и у двери, и в
+      // зоне какого-то другого триггера этой же карты.
+      if (suppressedExitPosition) {
+        const dx = suppressedExitPosition.x - heroTransform.x;
+        const dy = suppressedExitPosition.y - heroTransform.y;
+        if (dx * dx + dy * dy > EXIT_RADIUS * EXIT_RADIUS) suppressedExitPosition = null;
       }
-      if (triggerResult.firedIds.includes('trigger_t4') && !rodionResolved) {
-        rodionSceneActive = true;
-        rodionSceneStartMs = now;
-      }
-      // `prolog-kruchok.json` сам заканчивается узлом «title» (speaker
-      // «narrator», текст — «Глава 1. Труба») — титр главы уже часть
-      // диалога, отдельного оверлея поверх сцены не нужно.
-      if (triggerResult.firedIds.includes('trigger_t6') && hookDialog) {
-        openDialogue(hookDialog);
-      }
+      const exit = suppressedExitPosition ? null : findNearbyExit(heroTransform.x, heroTransform.y);
+      if (exit) {
+        void switchMap(exit);
+      } else {
+        const triggerResult = triggerRunner.update(heroTransform.x, heroTransform.y, gameState);
+        gameState = triggerResult.state;
+        if (triggerResult.firedIds.includes('trigger_t1')) hintUntilMs = now + 6000;
+        if (triggerResult.firedIds.includes('trigger_t3')) {
+          spawnEnemiesFromMarkers(world, loadedMap.enemySpawnEntities);
+        }
+        if (triggerResult.firedIds.includes('trigger_t4') && !rodionResolved) {
+          rodionSceneActive = true;
+          rodionSceneStartMs = now;
+        }
+        // `prolog-kruchok.json` сам заканчивается узлом «title» (speaker
+        // «narrator», текст — «Глава 1. Труба») — титр главы уже часть
+        // диалога, отдельного оверлея поверх сцены не нужно.
+        if (triggerResult.firedIds.includes('trigger_t6') && hookDialog) {
+          openDialogue(hookDialog);
+        }
 
-      if (rodionSceneActive && !rodionResolved) {
-        updateRodionScene(now, frameDtMs);
+        if (rodionSceneActive && !rodionResolved) {
+          updateRodionScene(now, frameDtMs);
+        }
+        // §11.5 п.2 карты (форс-развязка при входе в T5 без разрешённой сцены)
+        // сознательно не реализован буквально: `trigger_t5` стоит в (30,54) с
+        // радиусом 3, а Родион — в (30,52), то есть его собственная точка уже
+        // внутри радиуса T5 (расстояние 2 ≤ 3). Взятая по спеке буквально,
+        // форс-развязка срабатывала бы в момент простого подхода к Родиону для
+        // интеракции — раньше, чем игрок вообще успевает нажать `E`/`F` (баг,
+        // пойманный `tests/e2e/rodion-scene.spec.ts` при реализации). Таймер
+        // `RODION_SCENE_DURATION_MS` (15с, §11.5 п.1) — тот же самый честный
+        // форс-исход, не зависит от позиции игрока и уже полностью гарантирует
+        // «сцена не подвиснет навсегда» без этого дополнительного триггера;
+        // `trigger_t5` продолжает штатно ставить `flag.truba.zone_e_closed`
+        // через собственный эффект в `truba.json`, это не убрано.
       }
-      // §11.5 п.2 карты (форс-развязка при входе в T5 без разрешённой сцены)
-      // сознательно не реализован буквально: `trigger_t5` стоит в (30,54) с
-      // радиусом 3, а Родион — в (30,52), то есть его собственная точка уже
-      // внутри радиуса T5 (расстояние 2 ≤ 3). Взятая по спеке буквально,
-      // форс-развязка срабатывала бы в момент простого подхода к Родиону для
-      // интеракции — раньше, чем игрок вообще успевает нажать `E`/`F` (баг,
-      // пойманный `tests/e2e/rodion-scene.spec.ts` при реализации). Таймер
-      // `RODION_SCENE_DURATION_MS` (15с, §11.5 п.1) — тот же самый честный
-      // форс-исход, не зависит от позиции игрока и уже полностью гарантирует
-      // «сцена не подвиснет навсегда» без этого дополнительного триггера;
-      // `trigger_t5` продолжает штатно ставить `flag.truba.zone_e_closed`
-      // через собственный эффект в `truba.json`, это не убрано.
     }
 
     // Смерть героя (OF-016 останавливает движение на HP≤0, `input-control.ts`,
@@ -914,6 +1195,9 @@ export async function createDemoScene(
     },
     getFlag(key: string): boolean | number | string | undefined {
       return gameState.flags[key];
+    },
+    getMapId(): string {
+      return map.id;
     },
   };
 
