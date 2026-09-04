@@ -145,9 +145,20 @@ function resolveEnemyAttack(
 
   // Входящий урон по игроку — та же формула §4.1, Крит=1 (у врагов среза нет
   // характеристики Кураж — крит для их атак не задан GDD), Слабость=1
-  // (слабости — это то, что игрок находит у врага, не наоборот), Броня=0
-  // (система брони игрока — инвентарь OF-017, вне скоупа OF-016).
-  const damage = computeDamage({ base: def.attack.damage, skill: def.skill, crit: 1, weakness: 1, armor: 0 });
+  // (слабости — это то, что игрок находит у врага, не наоборот), Броня —
+  // `targetHealth.armor` героя (найдено P0-2, `docs/qa/balance-report.md`:
+  // раньше здесь был захардкожен `armor: 0`, из-за чего значение поля
+  // `health.armor` игрока не читалось вообще нигде в `src/` — сейчас, пока
+  // нет предметов/системы экипировки брони, `armor` героя всё равно всегда
+  // `0` (`demo-scene.ts`), так что это защита на будущее, не меняющая
+  // сегодняшний баланс).
+  const damage = computeDamage({
+    base: def.attack.damage,
+    skill: def.skill,
+    crit: 1,
+    weakness: 1,
+    armor: targetHealth.armor,
+  });
   applyDamageToPlayer(world, targetId, damage, targetTransform.x, targetTransform.y, {
     forcedShock: def.attack.forcedShock === true,
   });

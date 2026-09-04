@@ -90,6 +90,14 @@ export function resolveBossAttack(
   const dash = world.store('dashState').get(targetId);
   if (dash && dash.iframesRemainingMs > 0) return;
 
-  const damage = computeDamage({ base: def.attack.damage, skill: def.skill, crit: 1, weakness: 1, armor: 0 });
+  // Броня — `targetHealth.armor` героя, тем же фиксом, что и `ai.ts`
+  // (P0-2, `docs/qa/balance-report.md`) — раньше `armor: 0` был захардкожен.
+  const damage = computeDamage({
+    base: def.attack.damage,
+    skill: def.skill,
+    crit: 1,
+    weakness: 1,
+    armor: targetHealth.armor,
+  });
   applyDamageToPlayer(world, targetId, damage, targetTransform.x, targetTransform.y);
 }

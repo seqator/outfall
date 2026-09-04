@@ -11,12 +11,12 @@ function build(): World {
   return createWorld(createSeededRng(1), createEventBus());
 }
 
-function addPlayer(world: World, x: number, y: number, maxHp = 100): EntityId {
+function addPlayer(world: World, x: number, y: number, maxHp = 100, armor = 0): EntityId {
   const player = world.create();
   world.store('transform').add(player, { x, y, z: 0, prevX: x, prevY: y });
   world.store('velocity').add(player, { vx: 0, vy: 0 });
   world.store('controlled').add(player, { speed: 4 });
-  world.store('health').add(player, { hp: maxHp, maxHp, armor: 0 });
+  world.store('health').add(player, { hp: maxHp, maxHp, armor });
   return player;
 }
 
@@ -157,6 +157,34 @@ describe('sim/systems/ai: aiSystem — фазы', () => {
     advanceUntilPhase(world, enemy, 'cooldown');
 
     expect(world.store('health').get(player)?.hp).toBe(85);
+  });
+
+  /**
+   * Регрессия на P0-2 из `docs/qa/balance-report.md` (OF-040 balance pass):
+   * `resolveEnemyAttack` вызывал `computeDamage` с захардкоженным `armor: 0`
+   * вместо `targetHealth.armor` — броня игрока (поле `health.armor`) не
+   * читалась вообще нигде в `src/`. Пока в игре нет предметов/экипировки
+   * брони, герой всегда стартует с `armor: 0` (см. тест выше, не меняется
+   * этим фиксом) — эти два теста проверяют саму формулу §4.1
+   * (`Урон = ... − Броня`) на случай ненулевой брони, не поведение сегодняшней
+   * игры.
+   */
+  it('P0-2: ненулевая броня игрока вычитается из входящего урона (База=15, Навык=50 → 15, Броня=5 → 10)', () => {
+    const world = build();
+    const player = addPlayer(world, 1, 0, 100, 5);
+    const enemy = spawnEnemy(world, 'enemy.raki', { x: 0, y: 0 });
+    advanceUntilPhase(world, enemy, 'cooldown');
+
+    expect(world.store('health').get(player)?.hp).toBe(90);
+  });
+
+  it('P0-2: броня, превышающая расчётный урон, не даёт урону уйти ниже минимума 1 (Броня=20 > 15)', () => {
+    const world = build();
+    const player = addPlayer(world, 1, 0, 100, 20);
+    const enemy = spawnEnemy(world, 'enemy.raki', { x: 0, y: 0 });
+    advanceUntilPhase(world, enemy, 'cooldown');
+
+    expect(world.store('health').get(player)?.hp).toBe(99);
   });
 
   it('i-frames рывка блокируют урон полностью', () => {

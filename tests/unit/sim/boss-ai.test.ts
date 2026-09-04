@@ -9,10 +9,10 @@ function build(): World {
   return createWorld(createSeededRng(1), createEventBus());
 }
 
-function addPlayer(world: World, x: number, y: number, maxHp = 100): EntityId {
+function addPlayer(world: World, x: number, y: number, maxHp = 100, armor = 0): EntityId {
   const player = world.create();
   world.store('transform').add(player, { x, y, z: 0, prevX: x, prevY: y });
-  world.store('health').add(player, { hp: maxHp, maxHp, armor: 0 });
+  world.store('health').add(player, { hp: maxHp, maxHp, armor });
   return player;
 }
 
@@ -57,6 +57,16 @@ describe('sim/systems/boss-ai: resolveBossAttack (§2.8 combat.md — «Водя
     resolveBossAttack(world, BOSS_DEF, player, { x: 50, y: 50 });
 
     expect(world.store('health').get(player)?.hp).toBe(100);
+  });
+
+  /** Регрессия на P0-2 из `docs/qa/balance-report.md` (тот же захардкоженный `armor: 0`, что и в `ai.ts`, см. `tests/unit/sim/ai.test.ts`). */
+  it('P0-2: ненулевая броня игрока вычитается из урона Босса (База=25, Навык=50 → 25, Броня=10 → 15)', () => {
+    const world = build();
+    const player = addPlayer(world, 10, 10, 100, 10);
+
+    resolveBossAttack(world, BOSS_DEF, player, { x: 11, y: 10 });
+
+    expect(world.store('health').get(player)?.hp).toBe(85);
   });
 
   it('i-frames рывка блокируют урон полностью, даже если игрок в зоне AoE', () => {
