@@ -2,6 +2,22 @@
   "map.truba.name": "Труба",
   "npc.sanitar.name": "Санитар",
   "npc.rodion.name": "Родион «Ключик» Углов",
+  "npc.serega_sachok.name": "Серёга Сачок",
+
+  "item.pistol_ogryzok.name": "Пистолет «Огрызок»",
+  "item.pistol_ogryzok.desc": "Лёгкий самодельный пистолет под 9 мм — первое оружие трубочиста.",
+  "item.ammo_pistol.name": "Патроны 9 мм",
+  "item.ammo_pistol.desc": "Стандартный боеприпас «Огрызка».",
+  "item.cons_bint.name": "Аптечка «Бинт»",
+  "item.cons_bint.desc": "Полевая перевязка — восстанавливает здоровье.",
+  "item.mat_detali.name": "Детали",
+  "item.mat_detali.desc": "Лом металла — ресурс ремонта и крафта на верстаке.",
+  "item.quest_klyuch_shlyuza.name": "Латунный ключ шлюза",
+  "item.quest_klyuch_shlyuza.desc": "Служебный ключ от задвижки Плотины — снят с тонущего Родиона.",
+
+  "enemy.raki.name": "Раки",
+  "enemy.raki.attack.name": "Хватка клешнёй",
+  "enemy.raki.weakness.name": "Раскрытое брюшко",
 
   "dialog.prolog_smotritel.start": "Вода пошла — Плотина спускает сброс. Шевелись, не в первый раз ныряешь.",
   "dialog.prolog_smotritel.choice.yazyk": "[Язык 5] Не учи учёного — я и без соплей разберусь.",

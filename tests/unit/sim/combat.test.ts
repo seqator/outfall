@@ -676,6 +676,130 @@ describe('sim/systems/combat: handlePlayerDash — мёртвый герой', (
   });
 });
 
+describe('sim/systems/combat: новые события шины для аудио-слоя (OF-026)', () => {
+  it('выстрел из «Огрызка» эмитит combat.weapon-fired с branch=guns', () => {
+    const world = build(fakeRng(NO_SPREAD_NO_CRIT));
+    const hero = addHero(world, 1, 2);
+
+    const handler = vi.fn();
+    world.events.on('combat.weapon-fired', handler);
+
+    combatSystem(world, 1 / 60, attackInput());
+    world.events.drain();
+
+    expect(handler).toHaveBeenCalledExactlyOnceWith({
+      ownerId: hero,
+      weaponId: 'item.pistol_ogryzok',
+      branch: 'guns',
+      wx: 1,
+      wy: 2,
+    });
+  });
+
+  it('удар «Краном» (в т.ч. промах) тоже эмитит combat.weapon-fired с branch=fists', () => {
+    const world = build(fakeRng(NO_SPREAD_NO_CRIT));
+    const hero = addHero(world, 0, 0);
+    const weapons = world.store('weapons').get(hero);
+    if (weapons) weapons.equipped = 'item.wrench_kran';
+
+    const handler = vi.fn();
+    world.events.on('combat.weapon-fired', handler);
+
+    combatSystem(world, 1 / 60, attackInput()); // никого рядом нет — промах, звук взмаха всё равно есть
+    world.events.drain();
+
+    expect(handler).toHaveBeenCalledExactlyOnceWith({
+      ownerId: hero,
+      weaponId: 'item.wrench_kran',
+      branch: 'fists',
+      wx: 0,
+      wy: 0,
+    });
+  });
+
+  it('запуск перезарядки эмитит combat.reload-start', () => {
+    const world = build();
+    const hero = addHero(world, 0, 0);
+    const weapons = world.store('weapons').get(hero);
+    if (weapons) weapons.states['item.pistol_ogryzok'].ammo = 3;
+
+    const handler = vi.fn();
+    world.events.on('combat.reload-start', handler);
+
+    combatSystem(world, 1 / 60, createInputSnapshot({ pressed: new Set(['reload']) }));
+    world.events.drain();
+
+    expect(handler).toHaveBeenCalledExactlyOnceWith({
+      ownerId: hero,
+      weaponId: 'item.pistol_ogryzok',
+    });
+  });
+
+  it('повторный reload на уже идущей перезарядке не эмитит второй combat.reload-start', () => {
+    const world = build();
+    const hero = addHero(world, 0, 0);
+    const weapons = world.store('weapons').get(hero);
+    if (weapons) weapons.states['item.pistol_ogryzok'].ammo = 3;
+
+    const handler = vi.fn();
+    world.events.on('combat.reload-start', handler);
+
+    combatSystem(world, 1 / 60, createInputSnapshot({ pressed: new Set(['reload']) }));
+    combatSystem(world, 1 / 60, createInputSnapshot({ pressed: new Set(['reload']) }));
+    world.events.drain();
+
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('выстрел по пустому магазину эмитит combat.fire-empty, а не combat.weapon-fired', () => {
+    const world = build(fakeRng(NO_SPREAD_NO_CRIT));
+    const hero = addHero(world, 0, 0);
+    const weapons = world.store('weapons').get(hero);
+    if (weapons) weapons.states['item.pistol_ogryzok'].ammo = 0;
+
+    const emptyHandler = vi.fn();
+    const firedHandler = vi.fn();
+    world.events.on('combat.fire-empty', emptyHandler);
+    world.events.on('combat.weapon-fired', firedHandler);
+
+    combatSystem(world, 1 / 60, attackInput());
+    world.events.drain();
+
+    expect(emptyHandler).toHaveBeenCalledExactlyOnceWith({
+      ownerId: hero,
+      weaponId: 'item.pistol_ogryzok',
+    });
+    expect(firedHandler).not.toHaveBeenCalled();
+  });
+
+  it('успешный рывок эмитит combat.dash-start с позицией героя', () => {
+    const world = build();
+    const hero = addHero(world, 3, 4, { reflex: 10 });
+
+    const handler = vi.fn();
+    world.events.on('combat.dash-start', handler);
+
+    combatSystem(world, 1 / 60, createInputSnapshot({ pressed: new Set(['dash']) }));
+    world.events.drain();
+
+    expect(handler).toHaveBeenCalledExactlyOnceWith({ ownerId: hero, wx: 3, wy: 4 });
+  });
+
+  it('рывок на откате не эмитит combat.dash-start повторно', () => {
+    const world = build();
+    addHero(world, 0, 0, { reflex: 5 });
+
+    const handler = vi.fn();
+    world.events.on('combat.dash-start', handler);
+
+    combatSystem(world, 1 / 60, createInputSnapshot({ pressed: new Set(['dash']) }));
+    combatSystem(world, 0.1, createInputSnapshot({ pressed: new Set(['dash']) }));
+    world.events.drain();
+
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('sim/systems/combat: снаряды — выход за границу карты и защита от самопоражения', () => {
   it('снаряд, вылетевший за границу сетки без стены на пути, уничтожается на границе', () => {
     const world = build(fakeRng(NO_SPREAD_NO_CRIT));

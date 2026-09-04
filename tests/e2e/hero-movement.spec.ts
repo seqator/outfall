@@ -1,4 +1,5 @@
 import { expect, type Page, test } from '@playwright/test';
+import { startGame } from './helpers';
 
 /**
  * OF-015: герой-болванчик ходит по тестовой карте 64×64 со стенами.
@@ -58,7 +59,7 @@ test('герой ходит по тестовой карте 64×64 и упир�
   });
   page.on('pageerror', (err) => consoleErrors.push(String(err)));
 
-  await page.goto('/');
+  await startGame(page);
   await expect(page.locator('#game-canvas')).toBeVisible();
   await expect(page.locator('#fps-overlay')).toHaveText(/FPS: \d+/, { timeout: 5000 });
 

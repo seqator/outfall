@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { startGame } from './helpers';
 
 test('пустая сцена: canvas и FPS-оверлей рендерятся без ошибок в консоли', async ({ page }) => {
   const consoleErrors: string[] = [];
@@ -7,7 +8,7 @@ test('пустая сцена: canvas и FPS-оверлей рендерятся
   });
   page.on('pageerror', (err) => consoleErrors.push(String(err)));
 
-  await page.goto('/');
+  await startGame(page);
 
   const canvas = page.locator('#game-canvas');
   await expect(canvas).toBeVisible();

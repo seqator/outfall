@@ -306,6 +306,7 @@ function handlePlayerWeapons(world: World, input: InputSnapshot): void {
     ) {
       if (state.ammo < def.magazineSize && state.reloadRemainingMs <= 0) {
         state.reloadRemainingMs = def.reloadMs;
+        world.events.emit('combat.reload-start', { ownerId: entity, weaponId });
       }
     }
 
@@ -316,13 +317,31 @@ function handlePlayerWeapons(world: World, input: InputSnapshot): void {
     if (def.branch === 'fists') {
       performMeleeAttack(world, entity, transform, def, state);
       state.cooldownMs = def.fireCooldownMs;
+      world.events.emit('combat.weapon-fired', {
+        ownerId: entity,
+        weaponId,
+        branch: def.branch,
+        wx: transform.x,
+        wy: transform.y,
+      });
     } else if (state.ammo > 0) {
       performRangedAttack(world, entity, transform, facing, weaponId, def, input);
       state.ammo -= 1;
       state.cooldownMs = def.fireCooldownMs;
+      world.events.emit('combat.weapon-fired', {
+        ownerId: entity,
+        weaponId,
+        branch: def.branch,
+        wx: transform.x,
+        wy: transform.y,
+      });
+    } else {
+      // Магазин пуст — GDD §1 явно запрещает штрафовать за это (не
+      // запускаем авто-перезарядку и не наказываем игрока, только явный
+      // `reload`); сухой щелчок бойка — чисто звуковая обратная связь
+      // (`sfx.weapon.pistol.empty`), не игровой эффект.
+      world.events.emit('combat.fire-empty', { ownerId: entity, weaponId });
     }
-    // Магазин пуст — GDD §1 явно запрещает штрафовать за это (не запускаем
-    // авто-перезарядку и не наказываем игрока, только явный `reload`).
   }
 }
 
@@ -341,6 +360,14 @@ function handlePlayerDash(world: World, input: InputSnapshot): void {
     if (input.pressed.has('dash') && dash.cooldownRemainingMs <= 0) {
       dash.iframesRemainingMs = computeIframesMs(attrs.reflex);
       dash.cooldownRemainingMs = DASH_COOLDOWN_MS;
+      const transform = world.store('transform').get(entity);
+      // `controlled`-сущности среза всегда несут `transform` (герой создаётся
+      // с ним в `map-loader.createHero`) — `?? 0` защищает тип на случай
+      // неполной сущности, не достижимо через публичный API сейчас.
+      /* v8 ignore next 2 */
+      const wx = transform?.x ?? 0;
+      const wy = transform?.y ?? 0;
+      world.events.emit('combat.dash-start', { ownerId: entity, wx, wy });
     }
   }
 }

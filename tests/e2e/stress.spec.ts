@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { startGame } from './helpers';
 
 const WARMUP_MS = 3000;
 const SAMPLE_COUNT = 6;
@@ -51,13 +52,13 @@ test('стресс: 300 врагов + 2000 частиц не роняют FPS �
   });
   page.on('pageerror', (err) => consoleErrors.push(String(err)));
 
-  await page.goto('/');
+  await startGame(page);
   await expect(page.locator('#game-canvas')).toBeVisible();
   await expect(page.locator('#fps-overlay')).toHaveText(/FPS: \d+/, { timeout: 10_000 });
   await page.waitForTimeout(WARMUP_MS);
   const baselineAvg = await sampleFpsAverage(page);
 
-  await page.goto('/?stress=1');
+  await startGame(page, '?stress=1');
   await expect(page.locator('#game-canvas')).toBeVisible();
   await expect(page.locator('#fps-overlay')).toHaveText(/FPS: \d+/, { timeout: 10_000 });
   await page.waitForTimeout(WARMUP_MS);

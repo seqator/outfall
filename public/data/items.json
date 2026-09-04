@@ -1,0 +1,61 @@
+[
+  {
+    "id": "item.pistol_ogryzok",
+    "nameKey": "item.pistol_ogryzok.name",
+    "descKey": "item.pistol_ogryzok.desc",
+    "kind": "weapon",
+    "weight": 1.2,
+    "value": 180,
+    "stack": 1,
+    "weapon": {
+      "branch": "guns",
+      "damage": 8,
+      "rateMs": 250,
+      "magazine": 8,
+      "reloadMs": 1200,
+      "spreadDeg": 6,
+      "ammo": "item.ammo_pistol"
+    },
+    "effects": []
+  },
+  {
+    "id": "item.ammo_pistol",
+    "nameKey": "item.ammo_pistol.name",
+    "descKey": "item.ammo_pistol.desc",
+    "kind": "ammo",
+    "weight": 0.02,
+    "value": 4,
+    "stack": 200,
+    "effects": []
+  },
+  {
+    "id": "item.cons_bint",
+    "nameKey": "item.cons_bint.name",
+    "descKey": "item.cons_bint.desc",
+    "kind": "consumable",
+    "weight": 0.6,
+    "value": 60,
+    "stack": 5,
+    "effects": []
+  },
+  {
+    "id": "item.mat_detali",
+    "nameKey": "item.mat_detali.name",
+    "descKey": "item.mat_detali.desc",
+    "kind": "junk",
+    "weight": 0.3,
+    "value": 5,
+    "stack": 200,
+    "effects": []
+  },
+  {
+    "id": "item.quest_klyuch_shlyuza",
+    "nameKey": "item.quest_klyuch_shlyuza.name",
+    "descKey": "item.quest_klyuch_shlyuza.desc",
+    "kind": "key",
+    "weight": 0,
+    "value": 0,
+    "stack": 1,
+    "effects": []
+  }
+]
