@@ -36,8 +36,23 @@ import {
 } from '../sim';
 import { createFpsOverlay } from '../ui';
 import { createBrowserRaf } from './browser-raf';
+import { createEmptyInventory } from './inventory';
+import {
+  applyHeroSave,
+  applyWeaponsSave,
+  captureHeroSave,
+  captureWeaponsSave,
+  createSaveStore,
+  CURRENT_SAVE_SCHEMA_VERSION,
+  type SaveState,
+} from './save';
 import { createDevTestMap } from './world/dev-fixtures';
-import { createHero, findSpawnPoint, loadMapIntoWorld, toRendererMapData } from './world/map-loader';
+import {
+  createHero,
+  findSpawnPoint,
+  loadMapIntoWorld,
+  toRendererMapData,
+} from './world/map-loader';
 
 export interface DemoScene {
   destroy(): void;
@@ -177,11 +192,57 @@ export async function createDemoScene(
   // боевые события `sim` и дёргает VFX рендера (события доставляются после
   // тика, ADR-002 §5; `sim`/`render` друг про друга не знают).
   const unsubscribeHit = world.events.on('combat.hit', (payload) => {
-    renderer.emitParticles({ kind: 'hit', wx: payload.wx, wy: payload.wy, count: payload.crit ? 10 : 5 });
+    renderer.emitParticles({
+      kind: 'hit',
+      wx: payload.wx,
+      wy: payload.wy,
+      count: payload.crit ? 10 : 5,
+    });
   });
   const unsubscribeDeath = world.events.on('combat.death', (payload) => {
     renderer.emitParticles({ kind: 'death', wx: payload.wx, wy: payload.wy, count: 18 });
   });
+
+  // OF-019: ручное сохранение/загрузка — F5/F9. Полноценный UI слотов не в
+  // скоупе этой задачи; здесь минимум, достаточный, чтобы «сейв → загрузка →
+  // бой продолжается» можно было проверить руками в демо-сцене. Инвентарь/
+  // квесты/флаги демо-сцена пока не ведёт (нет живого `InventoryState`/
+  // `GameState` вне диалогов OF-018) — сохраняются пустыми; формат и
+  // `SaveStore` уже готовы к реальной интеграции без изменений (OF-027/028).
+  const saveStore = createSaveStore(window.localStorage);
+
+  function captureDemoSaveState(): SaveState {
+    return {
+      schemaVersion: CURRENT_SAVE_SCHEMA_VERSION,
+      savedAtMs: Date.now(),
+      hero: captureHeroSave(world, hero),
+      weapons: captureWeaponsSave(world, hero),
+      inventory: createEmptyInventory(),
+      flags: {},
+      quests: {},
+      rngSeed: DEV_SEED,
+      worldTick: world.tick,
+    };
+  }
+
+  const handleSaveLoadKey = (e: KeyboardEvent): void => {
+    if (e.code === 'F5') {
+      e.preventDefault();
+      saveStore.save(captureDemoSaveState());
+      console.log('[save] сохранено (F9 — загрузить)');
+    } else if (e.code === 'F9') {
+      e.preventDefault();
+      const loaded = saveStore.load();
+      if (!loaded) {
+        console.warn('[save] сохранений нет — сначала F5');
+        return;
+      }
+      applyHeroSave(world, hero, loaded.hero);
+      applyWeaponsSave(world, hero, loaded.weapons);
+      console.log('[save] загружено');
+    }
+  };
+  window.addEventListener('keydown', handleSaveLoadKey);
 
   const simulation = createSimulation(world);
   const input: DomInputHandle = createDomInputSource(window);
@@ -219,7 +280,9 @@ export async function createDemoScene(
         const weaponDef = WEAPON_DEFS[weapons.equipped];
         const weaponState = weapons.states[weapons.equipped];
         const ammo =
-          weaponDef.magazineSize !== undefined ? `${weaponState.ammo}/${weaponDef.magazineSize}` : '—';
+          weaponDef.magazineSize !== undefined
+            ? `${weaponState.ammo}/${weaponDef.magazineSize}`
+            : '—';
         const weaponName = weapons.equipped.replace('item.', '');
         hud += ` | HP ${Math.ceil(health.hp)}/${health.maxHp} | ${weaponName} ${ammo}`;
       }
@@ -246,6 +309,7 @@ export async function createDemoScene(
     destroy(): void {
       loop.stop();
       window.removeEventListener('resize', handleResize);
+      window.removeEventListener('keydown', handleSaveLoadKey);
       unsubscribeFrame();
       unsubscribeHit();
       unsubscribeDeath();

@@ -1,0 +1,20 @@
+{
+  "map.truba.name": "The Pipe",
+  "npc.sanitar.name": "The Medic",
+  "npc.rodion.name": "Rodion \"Little Key\" Uglov",
+
+  "dialog.prolog_smotritel.start": "Water's running — the Dam's opened the outfall. Move it, you've dived before.",
+  "dialog.prolog_smotritel.choice.yazyk": "[Language 5] Don't teach the teacher — I'll figure it out myself, no hand-holding.",
+  "dialog.prolog_smotritel.choice.default": "Got it. Heading to the grate.",
+  "dialog.prolog_smotritel.choice.tupoy": "Water. It's wet. I remember from last time.",
+
+  "dialog.prolog_vybor.start": "The key… take it. I'm drowning!",
+  "dialog.prolog_vybor.choice.spasti": "Pull him out.",
+  "dialog.prolog_vybor.choice.klyuch": "Take the key and let the current have him.",
+  "dialog.prolog_vybor.spas_end": "You… owe me now. Rodion, from the Dam. Won't forget it.",
+  "dialog.prolog_vybor.klyuch_end": "The key's yours. Rodion gets dragged under the grate — and he's gone.",
+
+  "dialog.prolog_kruchok.start": "Attention on the line: Vedeneyev requested more power for the Institute. Again.",
+  "dialog.prolog_kruchok.choice.ponyal": "Got it.",
+  "dialog.prolog_kruchok.title": "Chapter 1. The Pipe."
+}
