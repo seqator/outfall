@@ -20,6 +20,18 @@
  * `performRangedAttack`, гарантированным критом следующего выстрела. Убийство
  * врага игроком начисляет опыт (`formulas/progression.ts`) через
  * `grantKillXp`, если у убийцы есть компонент `progression`.
+ *
+ * OF-057 (P0-3 баланс-прохода, `docs/qa/balance-report.md`): перезарядка
+ * больше не пополняет магазин безусловно до полного — она ограничена
+ * `WeaponRuntimeState.reserveAmmo`, зеркалом реального инвентаря
+ * (`docs/design/combat.md` §1, «Патроны — жёсткий ресурс»). Резерв пуст —
+ * перезарядка не начинается (`combat.reload-empty`); резерва не хватает на
+ * полный магазин — пополнение частичное; фактическое списание из
+ * `InventoryState` происходит вне `sim`, по событию `combat.reload-finish`
+ * (`demo-scene.ts`, единственный слой с одновременным доступом к `World` и
+ * инвентарю — тот же принцип, что уже применяют `applyItemUseEffects`/
+ * `applyArenaModifiersToInput`). `sim` не импортирует `game/inventory` и не
+ * знает, что такое «предмет» — только число `reserveAmmo`.
  */
 
 import type { InputSnapshot } from '../../core/input';
@@ -76,7 +88,14 @@ const WEAPON_SLOT3 = WEAPON_SLOT_ORDER[2] as WeaponId;
 
 const EPSILON = 1e-6;
 
-/** Создаёт стартовое расходуемое состояние оружия — полный магазин (или 0 для безпатронного), без КД/перезарядки/комбо. */
+/**
+ * Создаёт стартовое расходуемое состояние оружия — полный магазин (или 0 для
+ * безпатронного), без КД/перезарядки/комбо. `reserveAmmo: 0` — честный
+ * дефолт до первой синхронизации с инвентарём (`demo-scene.ts`, OF-057):
+ * стартовый магазин уже полон сам по себе (не зависит от резерва), а резерв
+ * появится на первом кадре сцены, до того как игрок физически успеет
+ * нажать `R`.
+ */
 export function createWeaponRuntimeState(id: WeaponId): WeaponRuntimeState {
   const def = WEAPON_DEFS[id];
   return {
@@ -85,6 +104,7 @@ export function createWeaponRuntimeState(id: WeaponId): WeaponRuntimeState {
     reloadRemainingMs: 0,
     comboHits: 0,
     comboTargetId: null,
+    reserveAmmo: 0,
   };
 }
 
@@ -129,7 +149,22 @@ function tickPlayerTimers(world: World, dtMs: number): void {
           // не попадает, `reloadRemainingMs` для него никогда не становится
           // > 0. Защита инварианта, не достижимая через публичный API.
           /* v8 ignore next */
-          if (def.magazineSize !== undefined) state.ammo = def.magazineSize;
+          if (def.magazineSize !== undefined) {
+            // OF-057: патроны — жёсткий ресурс (`combat.md` §1), магазин
+            // пополняется максимум на то, что реально доступно в
+            // `reserveAmmo` (зеркало реального инвентаря, см. докстринг
+            // `WeaponRuntimeState.reserveAmmo`) — не обязательно до полного
+            // магазина. `reload-start` (`handlePlayerWeapons`) уже
+            // гарантирует `reserveAmmo > 0` на момент старта, но за время
+            // перезарядки резерв мог не измениться (никто, кроме этой же
+            // перезарядки, его не тратит) — `Math.min` здесь просто
+            // формализует «не больше, чем нужно, и не больше, чем есть».
+            const needed = def.magazineSize - state.ammo;
+            const loaded = Math.min(needed, state.reserveAmmo);
+            state.ammo += loaded;
+            state.reserveAmmo -= loaded;
+            world.events.emit('combat.reload-finish', { ownerId: entity, weaponId: id, ammoLoaded: loaded });
+          }
         }
       }
     }
@@ -400,10 +435,18 @@ function handlePlayerWeapons(world: World, input: InputSnapshot): void {
       def.reloadMs !== undefined
     ) {
       if (state.ammo < def.magazineSize && state.reloadRemainingMs <= 0) {
-        // «Быстрые руки» (`rpg-system.md` §3, перк 1) — перезарядка −25%.
-        const reloadEffect = getPlayerPerkEffect(world, entity);
-        state.reloadRemainingMs = def.reloadMs * (reloadEffect.reloadTimeMult ?? 1);
-        world.events.emit('combat.reload-start', { ownerId: entity, weaponId });
+        if (state.reserveAmmo <= 0) {
+          // OF-057: нечем перезаряжаться — резерв (реальный инвентарь,
+          // `WeaponRuntimeState.reserveAmmo`) пуст. GDD не штрафует игрока
+          // (§1 combat.md), но перезарядка физически не начинается —
+          // патроны нельзя набрать из ниоткуда (P0-3 баланс-прохода).
+          world.events.emit('combat.reload-empty', { ownerId: entity, weaponId });
+        } else {
+          // «Быстрые руки» (`rpg-system.md` §3, перк 1) — перезарядка −25%.
+          const reloadEffect = getPlayerPerkEffect(world, entity);
+          state.reloadRemainingMs = def.reloadMs * (reloadEffect.reloadTimeMult ?? 1);
+          world.events.emit('combat.reload-start', { ownerId: entity, weaponId });
+        }
       }
     }
 

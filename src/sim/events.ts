@@ -38,7 +38,7 @@ export interface CombatWeaponFiredEvent {
   readonly wy: number;
 }
 
-/** Перезарядка запущена (не завершена — заполнение магазина не эмитит отдельное событие, слушатель ждёт `def.reloadMs` сам). */
+/** Перезарядка запущена (не завершена — заполнение магазина не эмитит отдельное событие для аудио, слушатель звука ждёт `def.reloadMs` сам; завершение перезарядки — отдельное `combat.reload-finish` ниже, нужное игровому слою для списания патронов из инвентаря). */
 export interface CombatReloadStartEvent {
   readonly ownerId: EntityId;
   readonly weaponId: WeaponId;
@@ -48,6 +48,32 @@ export interface CombatReloadStartEvent {
 export interface CombatFireEmptyEvent {
   readonly ownerId: EntityId;
   readonly weaponId: WeaponId;
+}
+
+/**
+ * OF-057: попытка перезарядки при `WeaponRuntimeState.reserveAmmo <= 0` —
+ * симметрично `combat.fire-empty` (тот же «сухой щелчок», §1 combat.md: GDD
+ * не штрафует игрока, только звуковая обратная связь), но для `R`, а не для
+ * выстрела. Перезарядка в этом случае не запускается вовсе (`reloadRemainingMs`
+ * не выставляется).
+ */
+export interface CombatReloadEmptyEvent {
+  readonly ownerId: EntityId;
+  readonly weaponId: WeaponId;
+}
+
+/**
+ * OF-057: перезарядка реально завершилась — магазин пополнен на `ammoLoaded`
+ * патронов (может быть меньше, чем не хватало до полного магазина, если
+ * `reserveAmmo` не покрывал всю разницу — частичная перезарядка). Единственный
+ * потребитель — `demo-scene.ts`: реально списывает `ammoLoaded` патронов из
+ * `InventoryState` (`removeItemQuantity`, `game/inventory/inventory.ts`) —
+ * `sim` сам не трогает инвентарь, только сообщает случившийся факт.
+ */
+export interface CombatReloadFinishEvent {
+  readonly ownerId: EntityId;
+  readonly weaponId: WeaponId;
+  readonly ammoLoaded: number;
 }
 
 /** Рывок фактически запущен (i-frames выставлены) — не каждое нажатие `dash` (на откате событие не эмитится). */
@@ -64,6 +90,8 @@ declare module '../core/events' {
     'combat.weapon-fired': CombatWeaponFiredEvent;
     'combat.reload-start': CombatReloadStartEvent;
     'combat.fire-empty': CombatFireEmptyEvent;
+    'combat.reload-empty': CombatReloadEmptyEvent;
+    'combat.reload-finish': CombatReloadFinishEvent;
     'combat.dash-start': CombatDashStartEvent;
   }
 }

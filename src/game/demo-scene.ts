@@ -114,7 +114,9 @@ import {
   createEmptyInventory,
   createInventoryScreen,
   createItemRegistry,
+  getItemQuantity,
   nextDevUid,
+  removeItemQuantity,
   type ArmorSlotTable,
   type InventoryScreen,
   type InventoryState,
@@ -215,6 +217,16 @@ declare global {
         mapId: string,
         modifierIds: readonly string[],
       ): { bestWavesCleared: number; bestSurvivalMs: number } | undefined;
+      /**
+       * Магазин + резерв патронов конкретного оружия героя (`WeaponRuntimeState.
+       * ammo`/`reserveAmmo`, `sim/components`) — по умолчанию читает
+       * экипированное. Для `tests/e2e` (OF-057, `docs/qa/balance-report.md`
+       * P0-3): проверить, что перезарядка реально ограничена инвентарём, не
+       * парся строку HUD. `null`, если у героя нет `weapons`-компонента или
+       * запрошенного `weaponId` нет в `states` (не должно случаться для трёх
+       * оружий среза).
+       */
+      getWeaponAmmo(weaponId?: WeaponId): { ammo: number; reserveAmmo: number } | null;
     };
   }
 }
@@ -256,6 +268,16 @@ const SPAWNABLE_ENEMY_DEF_IDS: ReadonlySet<EnemyDefId> = new Set<EnemyDefId>([
   'enemy.avtomat_nii',
   'enemy.boss_zadvizhka',
 ]);
+
+/**
+ * OF-057: оружие среза, у которого вообще есть понятие «резерв патронов»
+ * (`def.magazineSize !== undefined`, `WEAPON_DEFS`) — «Кран» намеренно не
+ * входит, у него патронов нет (`fireCooldownMs`/`meleeRangeM`, не `magazine`).
+ * Используется мостом `syncWeaponReserveAmmo`/`combat.reload-finish` ниже,
+ * который синхронизирует `WeaponRuntimeState.reserveAmmo` с реальным
+ * инвентарём.
+ */
+const AMMO_WEAPON_IDS: readonly WeaponId[] = ['item.pistol_ogryzok', 'item.shotgun_duplo'];
 
 /**
  * `initialWeapon` — OF-039, модификатор Арены «только ножи»: герой стартует
@@ -934,6 +956,54 @@ export async function createDemoScene(
     if (!health) return;
     health.hp = Math.min(health.maxHp, health.hp + healAmount);
   }
+
+  /**
+   * OF-057 (P0-3 баланс-прохода, `docs/qa/balance-report.md`: «Патроны —
+   * не жёсткий ресурс, а бесконечный»): раз в кадр (см. вызов в
+   * `loop.onFrame` ниже) переносит реальное количество патронов из
+   * вещмешка в зеркальное поле ECS-состояния каждого дальнобойного оружия
+   * (`weapons.states[id].reserveAmmo`), которое дальше читает и уменьшает
+   * `combatSystem` при перезарядке (`sim/systems/combat.ts`, докстринг
+   * `WeaponRuntimeState.reserveAmmo`) — тот же принцип моста «одно место с
+   * одновременным доступом к `World` и `InventoryState`», что уже применяет
+   * `applyItemUseEffects` выше для лечения (OF-058) и
+   * `applyArenaModifiersToInput` для модификаторов Арены (OF-039). Тип
+   * патрона для оружия — поле `item.weapon.ammo` уже существующей записи
+   * `ItemRegistry` (`public/data/items.json`, тот же id, что и `WeaponId`
+   * оружия, — `item.pistol_ogryzok`) — данные, не выдумка: если оружие не
+   * зарегистрировано как `Item` в контенте (сегодня это «Дупло»/«item.
+   * shotgun_duplo» — ни одна карта не размечает точек подбора патронов для
+   * него, только для «Огрызка»), у него физически нет типа патрона, и
+   * резерв остаётся 0 — перезарядка для такого оружия недоступна после
+   * израсходования стартового магазина, честно отражая нынешнюю границу
+   * контента, а не изобретённое число. «Кран» (без магазина) сюда не входит
+   * — у него нет и не может быть резерва.
+   */
+  function syncWeaponReserveAmmo(): void {
+    const weapons = world.store('weapons').get(hero);
+    if (!weapons) return;
+    for (const weaponId of AMMO_WEAPON_IDS) {
+      const ammoItemId = itemRegistry.get(weaponId)?.weapon?.ammo;
+      weapons.states[weaponId].reserveAmmo = ammoItemId
+        ? getItemQuantity(inventoryState, ammoItemId)
+        : 0;
+    }
+  }
+
+  // OF-057: перезарядка `sim` реально завершилась (`tickPlayerTimers`,
+  // `sim/systems/combat.ts`) — списывает `ammoLoaded` патронов из настоящего
+  // `InventoryState`. `sim` сам этого сделать не может (не импортирует
+  // `game/inventory`, граница слоёв) — сообщает только факт через шину,
+  // симметрично тому, как `collectNearbyItemPickups` ниже кладёт патроны В
+  // инвентарь. Следующий кадр `syncWeaponReserveAmmo()` перечитает уже
+  // уменьшенный остаток — никакого двойного списания.
+  const unsubscribeReloadFinish = world.events.on('combat.reload-finish', (payload) => {
+    if (payload.ammoLoaded <= 0) return;
+    const ammoItemId = itemRegistry.get(payload.weaponId)?.weapon?.ammo;
+    if (!ammoItemId) return;
+    inventoryState = removeItemQuantity(inventoryState, ammoItemId, payload.ammoLoaded).state;
+    activeInventory?.update(inventoryState);
+  });
 
   function openInventory(): void {
     // Сцена Родиона — реалтайм-таймер, который сознательно не ставится на
@@ -1722,6 +1792,15 @@ export async function createDemoScene(
 
   const unsubscribeFrame = loop.onFrame((alpha, frameDtMs) => {
     const now = performance.now();
+    // OF-057: резерв патронов синхронизируется раз в кадр, ДО того, как
+    // рендер/HUD этого кадра прочитают `weapons.states[...].reserveAmmo` —
+    // тот же порядок, что уже применяет `collectNearbyItemPickups` ниже
+    // (инвентарь меняется не чаще раза в кадр, лишняя точность на уровне
+    // тика не нужна). `loop.onFrame` не вызывается, пока `loop` остановлен
+    // (диалог/инвентарь/сцены с реалтайм-таймером) — во время паузы
+    // перезарядка и так недоступна (`sim.step()` не тикает), синхронизация
+    // безопасно ждёт следующего реального кадра.
+    syncWeaponReserveAmmo();
     const panoramaActive = panoramaUntilMs !== null && now < panoramaUntilMs;
     if (panoramaUntilMs !== null && !panoramaActive) {
       // Панорама только что закончилась — отдаём камеру герою и снимаем зум.
@@ -1878,9 +1957,12 @@ export async function createDemoScene(
       if (health && weapons) {
         const weaponDef = WEAPON_DEFS[weapons.equipped];
         const weaponState = weapons.states[weapons.equipped];
+        // OF-057: резерв в скобках — числом, не «X/Y», чтобы не задеть
+        // существующий разбор HUD в e2e (`full-loop.spec.ts: readAmmo`,
+        // берёт последнее совпадение `\d+/\d+` — магазин, не резерв).
         const ammo =
           weaponDef.magazineSize !== undefined
-            ? `${weaponState.ammo}/${weaponDef.magazineSize}`
+            ? `${weaponState.ammo}/${weaponDef.magazineSize} (${weaponState.reserveAmmo})`
             : '—';
         const weaponName = t(`${weapons.equipped}.name`);
         hud += ` | HP ${Math.ceil(health.hp)}/${health.maxHp} | ${weaponName} ${ammo}`;
@@ -1975,6 +2057,12 @@ export async function createDemoScene(
     ): { bestWavesCleared: number; bestSurvivalMs: number } | undefined {
       return arenaRecordsStore.getRecord(mapId, modifierIds as ArenaModifierId[]);
     },
+    getWeaponAmmo(weaponId?: WeaponId): { ammo: number; reserveAmmo: number } | null {
+      const weapons = world.store('weapons').get(hero);
+      if (!weapons) return null;
+      const state = weapons.states[weaponId ?? weapons.equipped];
+      return state ? { ammo: state.ammo, reserveAmmo: state.reserveAmmo } : null;
+    },
   };
 
   return {
@@ -1994,6 +2082,7 @@ export async function createDemoScene(
       unsubscribeHit();
       unsubscribeDeath();
       unsubscribeInteract();
+      unsubscribeReloadFinish();
       activeDialogue?.destroy();
       activeInventory?.destroy();
       input.destroy();

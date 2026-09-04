@@ -68,13 +68,14 @@ function attackInput(overrides: Partial<InputSnapshot> = {}): InputSnapshot {
 }
 
 describe('sim/systems/combat: createWeaponsComponent/createWeaponRuntimeState', () => {
-  it('стартовое состояние — полный магазин, без КД/перезарядки/комбо', () => {
+  it('стартовое состояние — полный магазин, без КД/перезарядки/комбо, резерв патронов ещё не синхронизирован (0)', () => {
     expect(createWeaponRuntimeState('item.pistol_ogryzok')).toEqual({
       ammo: 8,
       cooldownMs: 0,
       reloadRemainingMs: 0,
       comboHits: 0,
       comboTargetId: null,
+      reserveAmmo: 0,
     });
   });
 
@@ -103,11 +104,14 @@ describe('sim/systems/combat: переключение оружия/переза
     expect(world.store('weapons').get(hero)?.equipped).toBe('item.wrench_kran');
   });
 
-  it('reload запускает перезарядку, ammo не меняется мгновенно', () => {
+  it('reload запускает перезарядку, ammo не меняется мгновенно (резерва достаточно)', () => {
     const world = build();
     const hero = addHero(world, 0, 0);
     const weapons = world.store('weapons').get(hero);
-    if (weapons) weapons.states['item.pistol_ogryzok'].ammo = 3;
+    if (weapons) {
+      weapons.states['item.pistol_ogryzok'].ammo = 3;
+      weapons.states['item.pistol_ogryzok'].reserveAmmo = 8;
+    }
 
     combatSystem(world, 1 / 60, createInputSnapshot({ pressed: new Set(['reload']) }));
 
@@ -116,17 +120,61 @@ describe('sim/systems/combat: переключение оружия/переза
     expect(state?.ammo).toBe(3);
   });
 
-  it('по истечении reloadMs магазин заполняется полностью', () => {
+  it('по истечении reloadMs магазин заполняется полностью, если резерва хватает ровно на нехватку — резерв списывается на ту же величину', () => {
     const world = build();
     const hero = addHero(world, 0, 0);
     const weapons = world.store('weapons').get(hero);
-    if (weapons) weapons.states['item.pistol_ogryzok'].ammo = 0;
+    if (weapons) {
+      weapons.states['item.pistol_ogryzok'].ammo = 0;
+      weapons.states['item.pistol_ogryzok'].reserveAmmo = 8;
+    }
 
     combatSystem(world, 1 / 60, createInputSnapshot({ pressed: new Set(['reload']) }));
     combatSystem(world, 1.2, createInputSnapshot());
 
-    expect(world.store('weapons').get(hero)?.states['item.pistol_ogryzok'].ammo).toBe(8);
-    expect(world.store('weapons').get(hero)?.states['item.pistol_ogryzok'].reloadRemainingMs).toBe(0);
+    const state = world.store('weapons').get(hero)?.states['item.pistol_ogryzok'];
+    expect(state?.ammo).toBe(8);
+    expect(state?.reloadRemainingMs).toBe(0);
+    expect(state?.reserveAmmo).toBe(0);
+  });
+
+  it('OF-057: резерв меньше нехватки магазина → частичная перезарядка, резерв уходит в 0', () => {
+    const world = build();
+    const hero = addHero(world, 0, 0);
+    const weapons = world.store('weapons').get(hero);
+    if (weapons) {
+      weapons.states['item.pistol_ogryzok'].ammo = 0;
+      weapons.states['item.pistol_ogryzok'].reserveAmmo = 5; // магазин на 8, не хватает
+    }
+
+    combatSystem(world, 1 / 60, createInputSnapshot({ pressed: new Set(['reload']) }));
+    combatSystem(world, 1.2, createInputSnapshot());
+
+    const state = world.store('weapons').get(hero)?.states['item.pistol_ogryzok'];
+    expect(state?.ammo).toBe(5); // не 8 — резерва не хватило на полный магазин
+    expect(state?.reserveAmmo).toBe(0);
+    expect(state?.reloadRemainingMs).toBe(0);
+  });
+
+  it('OF-057: резерв 0 → перезарядка не начинается вообще, магазин не меняется', () => {
+    const world = build();
+    const hero = addHero(world, 0, 0);
+    const weapons = world.store('weapons').get(hero);
+    if (weapons) {
+      weapons.states['item.pistol_ogryzok'].ammo = 0;
+      weapons.states['item.pistol_ogryzok'].reserveAmmo = 0;
+    }
+
+    combatSystem(world, 1 / 60, createInputSnapshot({ pressed: new Set(['reload']) }));
+
+    const state = world.store('weapons').get(hero)?.states['item.pistol_ogryzok'];
+    expect(state?.reloadRemainingMs).toBe(0); // перезарядка не запустилась
+    expect(state?.ammo).toBe(0);
+
+    // Даже если бы время шло дальше, ammo не появится ниоткуда — reload
+    // никогда не был запущен, tickPlayerTimers здесь не участвует.
+    combatSystem(world, 1.2, createInputSnapshot());
+    expect(world.store('weapons').get(hero)?.states['item.pistol_ogryzok'].ammo).toBe(0);
   });
 
   it('reload не запускается повторно, если магазин уже полон', () => {
@@ -763,7 +811,10 @@ describe('sim/systems/combat: новые события шины для ауди
     const world = build();
     const hero = addHero(world, 0, 0);
     const weapons = world.store('weapons').get(hero);
-    if (weapons) weapons.states['item.pistol_ogryzok'].ammo = 3;
+    if (weapons) {
+      weapons.states['item.pistol_ogryzok'].ammo = 3;
+      weapons.states['item.pistol_ogryzok'].reserveAmmo = 8;
+    }
 
     const handler = vi.fn();
     world.events.on('combat.reload-start', handler);
@@ -781,7 +832,10 @@ describe('sim/systems/combat: новые события шины для ауди
     const world = build();
     const hero = addHero(world, 0, 0);
     const weapons = world.store('weapons').get(hero);
-    if (weapons) weapons.states['item.pistol_ogryzok'].ammo = 3;
+    if (weapons) {
+      weapons.states['item.pistol_ogryzok'].ammo = 3;
+      weapons.states['item.pistol_ogryzok'].reserveAmmo = 8;
+    }
 
     const handler = vi.fn();
     world.events.on('combat.reload-start', handler);
@@ -791,6 +845,58 @@ describe('sim/systems/combat: новые события шины для ауди
     world.events.drain();
 
     expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('OF-057: reload при пустом резерве эмитит combat.reload-empty, а не combat.reload-start, ammo не меняется', () => {
+    const world = build();
+    const hero = addHero(world, 0, 0);
+    const weapons = world.store('weapons').get(hero);
+    if (weapons) {
+      weapons.states['item.pistol_ogryzok'].ammo = 3;
+      weapons.states['item.pistol_ogryzok'].reserveAmmo = 0;
+    }
+
+    const emptyHandler = vi.fn();
+    const startHandler = vi.fn();
+    world.events.on('combat.reload-empty', emptyHandler);
+    world.events.on('combat.reload-start', startHandler);
+
+    combatSystem(world, 1 / 60, createInputSnapshot({ pressed: new Set(['reload']) }));
+    world.events.drain();
+
+    expect(emptyHandler).toHaveBeenCalledExactlyOnceWith({
+      ownerId: hero,
+      weaponId: 'item.pistol_ogryzok',
+    });
+    expect(startHandler).not.toHaveBeenCalled();
+    expect(world.store('weapons').get(hero)?.states['item.pistol_ogryzok'].ammo).toBe(3);
+    expect(world.store('weapons').get(hero)?.states['item.pistol_ogryzok'].reloadRemainingMs).toBe(0);
+  });
+
+  it('OF-057: завершение перезарядки эмитит combat.reload-finish с реально загруженным количеством (частичная перезарядка)', () => {
+    const world = build();
+    const hero = addHero(world, 0, 0);
+    const weapons = world.store('weapons').get(hero);
+    if (weapons) {
+      weapons.states['item.pistol_ogryzok'].ammo = 1;
+      weapons.states['item.pistol_ogryzok'].reserveAmmo = 3; // не хватает на все 7 недостающих
+    }
+
+    const handler = vi.fn();
+    world.events.on('combat.reload-finish', handler);
+
+    combatSystem(world, 1 / 60, createInputSnapshot({ pressed: new Set(['reload']) }));
+    combatSystem(world, 1.2, createInputSnapshot());
+    world.events.drain();
+
+    expect(handler).toHaveBeenCalledExactlyOnceWith({
+      ownerId: hero,
+      weaponId: 'item.pistol_ogryzok',
+      ammoLoaded: 3,
+    });
+    const state = world.store('weapons').get(hero)?.states['item.pistol_ogryzok'];
+    expect(state?.ammo).toBe(4);
+    expect(state?.reserveAmmo).toBe(0);
   });
 
   it('выстрел по пустому магазину эмитит combat.fire-empty, а не combat.weapon-fired', () => {
@@ -927,7 +1033,10 @@ describe('sim/systems/combat: OF-035 — перки героя, читаемые
     const hero = addHero(world, 0, 0);
     addPerks(world, hero, ['perk.bystrye_ruki']);
     const weapons = world.store('weapons').get(hero);
-    if (weapons) weapons.states['item.pistol_ogryzok'].ammo = 3;
+    if (weapons) {
+      weapons.states['item.pistol_ogryzok'].ammo = 3;
+      weapons.states['item.pistol_ogryzok'].reserveAmmo = 8;
+    }
 
     combatSystem(world, 1 / 60, createInputSnapshot({ pressed: new Set(['reload']) }));
 

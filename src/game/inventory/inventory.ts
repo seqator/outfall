@@ -161,6 +161,52 @@ export function removeItem(state: InventoryState, uid: string, quantity = 1): Re
   return { state: { ...state, equipment }, removed };
 }
 
+/**
+ * Суммарное количество предмета `itemId` во всех стеках вещмешка (слоты
+ * экипировки не участвуют — патроны/боеприпасы никогда не экипируются,
+ * `equip-slots.ts`). OF-057: общая точка для моста `sim` ↔ `InventoryState`
+ * (`demo-scene.ts`) — синхронизация `WeaponRuntimeState.reserveAmmo` из
+ * реального инвентаря читает именно это число, не заглядывая в форму стеков
+ * напрямую (несколько стеков одного `itemId` — обычное дело, если предмет
+ * добирался по частям, см. `addItem`).
+ */
+export function getItemQuantity(state: InventoryState, itemId: string): number {
+  let total = 0;
+  for (const stack of state.backpack) {
+    if (stack.itemId === itemId) total += stack.quantity;
+  }
+  return total;
+}
+
+/**
+ * Удаляет `quantity` единиц предмета `itemId` из вещмешка, при необходимости
+ * распределяя списание по нескольким стекам (в порядке `backpack`) — в
+ * отличие от `removeItem` выше, который адресует ровно один стек по `uid`.
+ * OF-057: реальный расход патронов при перезарядке (`combat.reload-finish`)
+ * списывается именно так — резерв одного типа патронов может лежать в
+ * нескольких стеках. Останавливается, как только `quantity` набрано или
+ * предметы закончились; `removed` может быть меньше запроса — вызывающая
+ * сторона (`demo-scene.ts`) не должна запрашивать больше, чем `getItemQuantity`
+ * только что подтвердил, но если запросила — это честный неполный результат,
+ * не исключение.
+ */
+export function removeItemQuantity(
+  state: InventoryState,
+  itemId: string,
+  quantity: number,
+): RemoveItemOutcome {
+  let remaining = quantity;
+  let current = state;
+  for (const stack of state.backpack) {
+    if (remaining <= 0) break;
+    if (stack.itemId !== itemId) continue;
+    const outcome = removeItem(current, stack.uid, remaining);
+    current = outcome.state;
+    remaining -= outcome.removed;
+  }
+  return { state: current, removed: quantity - remaining };
+}
+
 // ---------------------------------------------------------------------------
 // Экипировка
 // ---------------------------------------------------------------------------

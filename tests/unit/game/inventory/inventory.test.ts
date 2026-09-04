@@ -3,7 +3,9 @@ import { DEV_ITEM_IDS, devArmorSlots, rawDevItems } from '../../../../src/game/i
 import {
   addItem,
   equipItem,
+  getItemQuantity,
   removeItem,
+  removeItemQuantity,
   unequipItem,
   useConsumable,
 } from '../../../../src/game/inventory/inventory';
@@ -126,6 +128,58 @@ describe('game/inventory/inventory: removeItem', () => {
     const outcome = removeItem(equipped, 'pistol-1', 1);
     expect(outcome.removed).toBe(1);
     expect(outcome.state.equipment.ranged).toBeUndefined();
+  });
+});
+
+describe('game/inventory/inventory: getItemQuantity/removeItemQuantity (OF-057 — мост resource-патронов)', () => {
+  it('getItemQuantity суммирует количество по всем стекам одного itemId, слоты экипировки не считает', () => {
+    const state = {
+      ...createEmptyInventory(),
+      backpack: [
+        { uid: 'a', itemId: DEV_ITEM_IDS.ammo9mm, quantity: 12 },
+        { uid: 'b', itemId: DEV_ITEM_IDS.ammo9mm, quantity: 8 },
+        { uid: 'c', itemId: DEV_ITEM_IDS.matDetali, quantity: 5 },
+      ],
+    };
+    expect(getItemQuantity(state, DEV_ITEM_IDS.ammo9mm)).toBe(20);
+    expect(getItemQuantity(state, DEV_ITEM_IDS.matDetali)).toBe(5);
+    expect(getItemQuantity(state, 'item.unknown')).toBe(0);
+  });
+
+  it('removeItemQuantity списывает из одного стека, если хватает', () => {
+    const state = addItem(createEmptyInventory(), registry, {
+      itemId: DEV_ITEM_IDS.ammo9mm,
+      quantity: 20,
+      uid: 'stack-1',
+    }).state;
+    const outcome = removeItemQuantity(state, DEV_ITEM_IDS.ammo9mm, 8);
+    expect(outcome.removed).toBe(8);
+    expect(getItemQuantity(outcome.state, DEV_ITEM_IDS.ammo9mm)).toBe(12);
+  });
+
+  it('removeItemQuantity распределяет списание по нескольким стекам одного itemId, в порядке backpack', () => {
+    const state = {
+      ...createEmptyInventory(),
+      backpack: [
+        { uid: 'a', itemId: DEV_ITEM_IDS.ammo9mm, quantity: 5 },
+        { uid: 'b', itemId: DEV_ITEM_IDS.ammo9mm, quantity: 5 },
+      ],
+    };
+    const outcome = removeItemQuantity(state, DEV_ITEM_IDS.ammo9mm, 8);
+    expect(outcome.removed).toBe(8);
+    // первый стек выбит полностью (5), второй — на недостающие 3.
+    expect(outcome.state.backpack).toEqual([{ uid: 'b', itemId: DEV_ITEM_IDS.ammo9mm, quantity: 2 }]);
+  });
+
+  it('removeItemQuantity — запрос больше, чем реально есть: списывает всё, removed < quantity', () => {
+    const state = addItem(createEmptyInventory(), registry, {
+      itemId: DEV_ITEM_IDS.ammo9mm,
+      quantity: 3,
+      uid: 'stack-1',
+    }).state;
+    const outcome = removeItemQuantity(state, DEV_ITEM_IDS.ammo9mm, 10);
+    expect(outcome.removed).toBe(3);
+    expect(outcome.state.backpack).toEqual([]);
   });
 });
 

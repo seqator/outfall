@@ -53,6 +53,15 @@ function buildWorld(): { world: World & WorldControl; hero: EntityId; boss: Enti
   world.store('combatSkills').add(hero, { guns: 50, heavy: 50, fists: 50 });
   world.store('dashState').add(hero, { iframesRemainingMs: 0, cooldownRemainingMs: 0 });
 
+  // OF-057: перезарядка теперь ограничена `reserveAmmo` (зеркало реального
+  // инвентаря, синхронизируемое `demo-scene.ts` — вне зоны этого чистого
+  // `sim`-теста). Этот сценарий самопроверяет только критерий готовности
+  // «время убийства босса» (DPS/тайминг стрельбы в окно слабости), не
+  // экономику патронов — щедрый резерв здесь такое же намеренное упрощение,
+  // как и `hp: 1_000_000` у героя чуть выше (см. докстринг файла).
+  const heroWeapons = world.store('weapons').get(hero);
+  if (heroWeapons) heroWeapons.states['item.pistol_ogryzok'].reserveAmmo = Number.MAX_SAFE_INTEGER;
+
   const boss = spawnEnemy(world, 'enemy.boss_zadvizhka', { x: 0, y: 0 });
 
   return { world, hero, boss };

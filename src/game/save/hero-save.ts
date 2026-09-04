@@ -12,7 +12,8 @@
  */
 
 import type { EntityId, World } from '../../core/world';
-import type { HeroSave, WeaponsSave } from './save-schema';
+import type { WeaponRuntimeState } from '../../sim';
+import type { HeroSave, WeaponRuntimeStateSave, WeaponsSave } from './save-schema';
 
 /** Бросается, если у сущности нет компонента, необходимого для снимка героя — снимать «не-героя» этим модулем не предполагается. */
 export class MissingHeroComponentError extends Error {}
@@ -76,15 +77,47 @@ export function applyHeroSave(world: World, hero: EntityId, save: HeroSave): voi
   });
 }
 
+/**
+ * OF-057: `WeaponRuntimeState.reserveAmmo` намеренно НЕ сохраняется —
+ * это не самостоятельное состояние, а зеркало реального `InventoryState`
+ * (уже часть `SaveState.inventory`, сохраняется отдельно), которое
+ * `demo-scene.ts` пересчитывает заново каждый кадр. Сохранять его вторым
+ * источником правды означало бы либо дублирование (лишний повод разъехаться
+ * с инвентарём), либо просто мёртвое поле — `WeaponRuntimeStateSaveSchema`
+ * (`save-schema.ts`) его не описывает, только 5 полей, которые реально нужны,
+ * чтобы `sim` продолжил бой после загрузки.
+ */
+function captureWeaponState(state: WeaponRuntimeState): WeaponRuntimeStateSave {
+  return {
+    ammo: state.ammo,
+    cooldownMs: state.cooldownMs,
+    reloadRemainingMs: state.reloadRemainingMs,
+    comboHits: state.comboHits,
+    comboTargetId: state.comboTargetId,
+  };
+}
+
+/** `reserveAmmo: 0` — временный плейсхолдер до первой синхронизации с инвентарём (см. докстринг `captureWeaponState` выше): `demo-scene.ts` перезаписывает его актуальным числом на первом же кадре после загрузки, раньше, чем игрок физически успеет нажать `R`. */
+function applyWeaponState(save: WeaponRuntimeStateSave): WeaponRuntimeState {
+  return {
+    ammo: save.ammo,
+    cooldownMs: save.cooldownMs,
+    reloadRemainingMs: save.reloadRemainingMs,
+    comboHits: save.comboHits,
+    comboTargetId: save.comboTargetId,
+    reserveAmmo: 0,
+  };
+}
+
 /** Снимает экипированное оружие + независимое расходуемое состояние каждого из трёх оружий среза (`WeaponsComponent`, `sim/components`). */
 export function captureWeaponsSave(world: World, hero: EntityId): WeaponsSave {
   const weapons = requireComponent(world.store('weapons').get(hero), 'weapons');
   return {
     equipped: weapons.equipped,
     states: {
-      'item.pistol_ogryzok': { ...weapons.states['item.pistol_ogryzok'] },
-      'item.shotgun_duplo': { ...weapons.states['item.shotgun_duplo'] },
-      'item.wrench_kran': { ...weapons.states['item.wrench_kran'] },
+      'item.pistol_ogryzok': captureWeaponState(weapons.states['item.pistol_ogryzok']),
+      'item.shotgun_duplo': captureWeaponState(weapons.states['item.shotgun_duplo']),
+      'item.wrench_kran': captureWeaponState(weapons.states['item.wrench_kran']),
     },
   };
 }
@@ -94,9 +127,9 @@ export function applyWeaponsSave(world: World, hero: EntityId, save: WeaponsSave
   world.store('weapons').add(hero, {
     equipped: save.equipped,
     states: {
-      'item.pistol_ogryzok': { ...save.states['item.pistol_ogryzok'] },
-      'item.shotgun_duplo': { ...save.states['item.shotgun_duplo'] },
-      'item.wrench_kran': { ...save.states['item.wrench_kran'] },
+      'item.pistol_ogryzok': applyWeaponState(save.states['item.pistol_ogryzok']),
+      'item.shotgun_duplo': applyWeaponState(save.states['item.shotgun_duplo']),
+      'item.wrench_kran': applyWeaponState(save.states['item.wrench_kran']),
     },
   });
 }

@@ -3,7 +3,9 @@
  * подписывается на боевые события шины ядра (`combat.hit`/`combat.death` из
  * `sim/events.ts`, плюс `combat.weapon-fired`/`combat.reload-start`/
  * `combat.fire-empty`/`combat.dash-start`, добавленные этой же задачей в
- * `sim/systems/combat.ts`) и на каждое из них проигрывает подходящий
+ * `sim/systems/combat.ts`, и `combat.reload-empty` из OF-057 — «нечем
+ * перезаряжаться», тот же звук, что и «сухой щелчок» пустого магазина) и на
+ * каждое из них проигрывает подходящий
  * процедурный звук из `synth.ts` — `sim` при этом ничего не знает про
  * `AudioContext` (граница слоёв, `docs/tech/architecture.md` §1).
  *
@@ -168,6 +170,12 @@ export function createAudioEngine(
       spawnVoice((onEnded) => synthReload(context, sfxGain, params, onEnded));
     }),
     events.on('combat.fire-empty', () => {
+      spawnVoice((onEnded) => synthClick(context, sfxGain, EMPTY_CLICK, onEnded));
+    }),
+    // OF-057: «нечем перезаряжаться» (`R` при пустом резерве патронов) —
+    // тот же сухой щелчок, что и попытка выстрела с пустым магазином, оба
+    // сообщают одно и то же ощущение «патронов нет физически».
+    events.on('combat.reload-empty', () => {
       spawnVoice((onEnded) => synthClick(context, sfxGain, EMPTY_CLICK, onEnded));
     }),
     events.on('combat.dash-start', () => {
