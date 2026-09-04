@@ -4,6 +4,7 @@
  * без единого пикселя на экране).
  */
 
+import { createIsoProjection, type IsoProjection } from '../core/iso';
 import type { World } from '../core/world';
 import type { Camera } from './camera';
 import type {
@@ -13,12 +14,19 @@ import type {
   RendererInitOptions,
   RendererStats,
 } from './renderer';
+import { screenToWorldPoint, type WorldPoint } from './screen-to-world';
 
 export class NullRenderer implements IRenderer {
   private drawCallsCount = 0;
+  private readonly iso: IsoProjection = createIsoProjection();
+  /** Размер «канваса» — из `init()` (симметрично `PixiRenderer.app.screen.width/height`), 0 до вызова `init()`. */
+  private width = 0;
+  private height = 0;
 
-  async init(_canvas: HTMLCanvasElement, _opts: RendererInitOptions): Promise<void> {
-    // намеренно ничего не делает
+  init(_canvas: HTMLCanvasElement, opts: RendererInitOptions): Promise<void> {
+    this.width = opts.width;
+    this.height = opts.height;
+    return Promise.resolve();
   }
 
   async loadAtlas(_id: string, _url: string): Promise<void> {
@@ -35,6 +43,10 @@ export class NullRenderer implements IRenderer {
 
   draw(_world: World, _camera: Camera, _alpha: number): void {
     this.drawCallsCount += 1;
+  }
+
+  screenToWorld(sx: number, sy: number, camera: Camera): WorldPoint {
+    return screenToWorldPoint(this.iso, camera, this.width, this.height, sx, sy);
   }
 
   emitParticles(_fx: ParticleBurst): void {

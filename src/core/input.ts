@@ -15,6 +15,31 @@ export type Action =
 export interface InputSnapshot {
   readonly moveX: number; // -1..1, уже в мировых осях
   readonly moveY: number;
+  /**
+   * Сырые координаты курсора в пикселях канваса (после вычитания
+   * `canvas.getBoundingClientRect()`), а НЕ мировые координаты — вопреки
+   * тому, что можно было бы подумать по названию `aimWorld` ниже. Заполняет
+   * `src/input/dom-input.ts` (единственный слой, который знает про DOM);
+   * `sim` это поле не читает вообще — оно существует только как промежуточное
+   * сырьё для пересчёта `aimWorld` игровым слоем (`game/demo-scene.ts`,
+   * `renderer.screenToWorld`, OF-056). До первого `mousemove` — `{0,0}`.
+   */
+  readonly aimScreen: { readonly x: number; readonly y: number };
+  /**
+   * Точка прицеливания в мировых координатах — ровно то, что читает `sim`
+   * (`sim/systems/combat.ts: handlePlayerFacing`, OF-056). `dom-input.ts` это
+   * поле НЕ заполняет (там нет доступа к камере/канвасу) — оставляет
+   * значение по умолчанию `{0,0}`; реальное значение подставляет `game`
+   * (обёртка `InputSource` в `demo-scene.ts`, симметричная инверсия
+   * `PixiRenderer.draw()` через `renderer.screenToWorld`) ДО того, как
+   * снимок дойдёт до `loop`/`sim.step()`. Отсюда важный угловой случай:
+   * `{0,0}` — легитимная, но, скорее всего, бессмысленная мировая точка
+   * (курсор мыши физически ещё ни разу не двигался в эту сессию, либо
+   * тестовый/реплей-код прогоняет `sim` напрямую, минуя `game`) —
+   * `handlePlayerFacing` считает это вырожденным случаем (курсор совпадает
+   * с игроком) и откатывается на старое поведение (направление последнего
+   * движения), а не разворачивает героя в произвольную сторону.
+   */
   readonly aimWorld: { readonly x: number; readonly y: number };
   readonly pressed: ReadonlySet<Action>; // нажаты именно в этом тике
   readonly held: ReadonlySet<Action>; // удерживаются
@@ -24,6 +49,7 @@ export interface InputSnapshot {
 export const EMPTY_INPUT: InputSnapshot = Object.freeze({
   moveX: 0,
   moveY: 0,
+  aimScreen: Object.freeze({ x: 0, y: 0 }),
   aimWorld: Object.freeze({ x: 0, y: 0 }),
   pressed: new Set<Action>(),
   held: new Set<Action>(),
@@ -38,6 +64,7 @@ export function createInputSnapshot(partial: Partial<InputSnapshot> = {}): Input
   return {
     moveX: partial.moveX ?? EMPTY_INPUT.moveX,
     moveY: partial.moveY ?? EMPTY_INPUT.moveY,
+    aimScreen: partial.aimScreen ?? EMPTY_INPUT.aimScreen,
     aimWorld: partial.aimWorld ?? EMPTY_INPUT.aimWorld,
     pressed: partial.pressed ?? EMPTY_INPUT.pressed,
     held: partial.held ?? EMPTY_INPUT.held,

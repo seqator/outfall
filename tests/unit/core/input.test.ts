@@ -16,18 +16,21 @@ describe('core/input: createInputSnapshot', () => {
     const snapshot = createInputSnapshot({ moveX: 1 });
     expect(snapshot.moveX).toBe(1);
     expect(snapshot.moveY).toBe(EMPTY_INPUT.moveY);
+    expect(snapshot.aimScreen).toBe(EMPTY_INPUT.aimScreen);
     expect(snapshot.aimWorld).toBe(EMPTY_INPUT.aimWorld);
   });
 
-  it('позволяет задать pressed/held/aimWorld', () => {
+  it('позволяет задать pressed/held/aimScreen/aimWorld', () => {
     const pressed = new Set<Action>(['dash']);
     const held = new Set<Action>(['attack']);
+    const aimScreen = { x: 100, y: 200 };
     const aimWorld = { x: 3, y: 4 };
 
-    const snapshot = createInputSnapshot({ pressed, held, aimWorld });
+    const snapshot = createInputSnapshot({ pressed, held, aimScreen, aimWorld });
 
     expect(snapshot.pressed).toBe(pressed);
     expect(snapshot.held).toBe(held);
+    expect(snapshot.aimScreen).toBe(aimScreen);
     expect(snapshot.aimWorld).toBe(aimWorld);
   });
 });

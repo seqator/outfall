@@ -57,6 +57,17 @@ export interface IRenderer {
   setMap(map: MapData): void;
   /** Читает компоненты и обновляет пул спрайтов. alpha — интерполяция transform.prev→cur. */
   draw(world: World, camera: Camera, alpha: number): void;
+  /**
+   * Обратное преобразование к тому, что `draw()` делает с камерой (OF-056):
+   * координаты канваса (canvas-relative px, после вычитания
+   * `getBoundingClientRect()`) → мировые. Использует состояние `camera`
+   * ровно на момент вызова — камера меняется каждый кадр, вызывающая
+   * сторона (`game`) обязана передавать актуальный объект, не значение на
+   * момент создания рендерера. Единственный практический вызывающий —
+   * `demo-scene.ts` (пересчитывает `InputSnapshot.aimWorld` из
+   * `aimScreen` до того, как снимок дойдёт до `sim`).
+   */
+  screenToWorld(sx: number, sy: number, camera: Camera): { wx: number; wy: number };
   emitParticles(fx: ParticleBurst): void;
   resize(w: number, h: number): void;
   destroy(): void;

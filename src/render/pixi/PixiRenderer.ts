@@ -31,6 +31,7 @@ import type {
   RendererInitOptions,
   RendererStats,
 } from '../renderer';
+import { screenToWorldPoint, type WorldPoint } from '../screen-to-world';
 import { drawGroundTile, drawWallBox } from './tile-draw';
 
 /** Форсируем WebGL: WebGPU-путь — риск #5 из доклада, включаем позже осознанно. */
@@ -456,6 +457,13 @@ export class PixiRenderer implements IRenderer {
       this.app.screen.width / 2 - camScreen.sx * camera.zoom,
       this.app.screen.height / 2 - camScreen.sy * camera.zoom,
     );
+  }
+
+  /** OF-056: инверсия математики камеры выше — вынесена в чистую `screenToWorldPoint` (тестируется без Pixi). До `init()` (`app` ещё нет) возвращает мировую точку при нулевом канвасе — не должно случаться на практике (сцена всегда сперва вызывает `init()`), защита типа. */
+  screenToWorld(sx: number, sy: number, camera: Camera): WorldPoint {
+    const width = this.app?.screen.width ?? 0;
+    const height = this.app?.screen.height ?? 0;
+    return screenToWorldPoint(this.iso, camera, width, height, sx, sy);
   }
 
   private colorForParticleKind(kind: string): number {

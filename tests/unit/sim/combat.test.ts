@@ -167,17 +167,58 @@ describe('sim/systems/combat: перезарядка/КД тикают на вс
   });
 });
 
-describe('sim/systems/combat: facing (прицеливание по направлению движения)', () => {
-  it('обновляет facing по moveX/moveY, нормализуя вектор', () => {
+describe('sim/systems/combat: facing (OF-056 — прицеливание курсором, aimWorld)', () => {
+  it('facing = вектор от героя к aimWorld, независимо от направления движения (твинстик — кайтинг)', () => {
     const world = build();
     const hero = addHero(world, 0, 0, { facing: { dirX: 1, dirY: 0 } });
 
+    // Герой бежит на восток (moveX=1), но целится строго на север — реальный
+    // твинстик из `docs/OUTFALL-CONCEPT.md`, не «атака = направление бега».
+    combatSystem(
+      world,
+      1 / 60,
+      createInputSnapshot({ moveX: 1, moveY: 0, aimWorld: { x: 0, y: -5 } }),
+    );
+
+    expect(world.store('facing').get(hero)).toEqual({ dirX: 0, dirY: -1 });
+  });
+
+  it('позволяет пятиться и стрелять назад — движение и прицел независимы', () => {
+    const world = build();
+    const hero = addHero(world, 5, 5, { facing: { dirX: 0, dirY: -1 } });
+
+    // Герой пятится на запад (moveX=-1), целится на восток от себя.
+    combatSystem(
+      world,
+      1 / 60,
+      createInputSnapshot({ moveX: -1, moveY: 0, aimWorld: { x: 15, y: 5 } }),
+    );
+
+    expect(world.store('facing').get(hero)).toEqual({ dirX: 1, dirY: 0 });
+  });
+
+  it('нормализует вектор до aimWorld вне зависимости от дистанции до курсора', () => {
+    const world = build();
+    const hero = addHero(world, 2, 2, { facing: { dirX: 1, dirY: 0 } });
+
+    combatSystem(world, 1 / 60, createInputSnapshot({ aimWorld: { x: 2, y: 102 } }));
+
+    const facing = world.store('facing').get(hero);
+    expect(facing?.dirX).toBeCloseTo(0);
+    expect(facing?.dirY).toBeCloseTo(1);
+  });
+
+  it('вырожденный случай — aimWorld совпадает с позицией героя (курсор ни разу не двигался/sim без game): откат на направление движения', () => {
+    const world = build();
+    const hero = addHero(world, 0, 0, { facing: { dirX: 1, dirY: 0 } });
+
+    // aimWorld по умолчанию {0,0} == позиция героя (0,0) — нормализовать некуда.
     combatSystem(world, 1 / 60, createInputSnapshot({ moveX: 0, moveY: -1 }));
 
     expect(world.store('facing').get(hero)).toEqual({ dirX: 0, dirY: -1 });
   });
 
-  it('сохраняет последнее направление, если ввод движения нулевой', () => {
+  it('вырожденный случай + нулевое движение — сохраняет последнее направление facing', () => {
     const world = build();
     const hero = addHero(world, 0, 0, { facing: { dirX: 0, dirY: -1 } });
 
@@ -808,7 +849,12 @@ describe('sim/systems/combat: снаряды — выход за границу 
     const grid = world.create();
     world.store('mapGrid').add(grid, { width: 4, height: 4, collision: new Uint8Array(16) });
 
-    combatSystem(world, 1 / 60, attackInput());
+    // OF-056: facing теперь считается по `aimWorld` (см. `handlePlayerFacing`) —
+    // явный `aimWorld` здесь держит выстрел строго на запад ((-1,0), как и
+    // задумано опцией `facing` выше), а не отдаёт направление на волю
+    // дефолтного `aimWorld: {0,0}`, который после OF-056 тоже был бы
+    // «не совпадает с героем» и потому перезаписал бы `facing` диагональю.
+    combatSystem(world, 1 / 60, attackInput({ aimWorld: { x: 0, y: 1.5 } }));
     for (let i = 0; i < 10 && [...world.query('projectile')].length > 0; i += 1) {
       combatSystem(world, 1 / 60, createInputSnapshot());
     }

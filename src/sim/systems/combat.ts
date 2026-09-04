@@ -136,15 +136,44 @@ function tickPlayerTimers(world: World, dtMs: number): void {
   }
 }
 
+/**
+ * OF-056: направление героя = вектор от героя к `input.aimWorld` (курсор
+ * мыши в мировых координатах, пересчитанный игровым слоем — см. докстринг
+ * `InputSnapshot.aimWorld` в `core/input.ts`), а не направление последнего
+ * WASD-движения — иначе твинстик-прицеливание из `docs/OUTFALL-CONCEPT.md`
+ * не существует физически (`docs/qa/balance-report.md` P0-1: нельзя целиться
+ * в одну сторону, двигаясь в другую, кайтинг невозможен).
+ *
+ * Угловой случай — `aimWorld` совпадает (или почти совпадает, `EPSILON`) с
+ * позицией героя: либо курсор физически ещё ни разу не двигался в эту
+ * сессию (`aimWorld` — дефолт `{0,0}` из `EMPTY_INPUT`, который по чистой
+ * случайности может совпасть с позицией героя, скорее — просто вырожденный
+ * вектор нулевой длины), либо `sim` прогоняется напрямую в тестах/реплеях
+ * без обёртки `game` (там `aimWorld` тоже не заполняется). В этом случае
+ * нормализовать направление на курсор невозможно (`atan2(0,0)`
+ * недетерминирован) — откатываемся на старое поведение (направление
+ * последнего движения), не разворачиваем героя в произвольную сторону.
+ */
 function handlePlayerFacing(world: World, input: InputSnapshot): void {
-  for (const entity of world.query('controlled', 'facing')) {
+  for (const entity of world.query('controlled', 'facing', 'transform')) {
     const facing = world.store('facing').get(entity);
+    const transform = world.store('transform').get(entity);
     /* v8 ignore next */
-    if (!facing) continue;
-    const len = Math.hypot(input.moveX, input.moveY);
-    if (len > EPSILON) {
-      facing.dirX = input.moveX / len;
-      facing.dirY = input.moveY / len;
+    if (!facing || !transform) continue;
+
+    const aimDx = input.aimWorld.x - transform.x;
+    const aimDy = input.aimWorld.y - transform.y;
+    const aimLen = Math.hypot(aimDx, aimDy);
+    if (aimLen > EPSILON) {
+      facing.dirX = aimDx / aimLen;
+      facing.dirY = aimDy / aimLen;
+      continue;
+    }
+
+    const moveLen = Math.hypot(input.moveX, input.moveY);
+    if (moveLen > EPSILON) {
+      facing.dirX = input.moveX / moveLen;
+      facing.dirY = input.moveY / moveLen;
     }
   }
 }

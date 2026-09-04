@@ -6,4 +6,5 @@
 export * from './renderer';
 export * from './camera';
 export * from './depth';
+export * from './screen-to-world';
 export * from './null-renderer';

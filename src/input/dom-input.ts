@@ -15,6 +15,16 @@
  * кладущие/убирающие тот же синтетический код `'Mouse0'` в `heldKeys` —
  * без этого «игрок стреляет (ЛКМ или attack)» из боевого среза было бы
  * невозможно проверить руками.
+ *
+ * OF-056: этот файл отдаёт только `aimScreen` — сырые `clientX/clientY` из
+ * `mousemove` (координаты относительно окна, не канваса и тем более не
+ * мира). Раньше поле называлось `aimWorld` и `sim` физически никогда его не
+ * читал (прицеливание работало по направлению последнего WASD-движения,
+ * `docs/qa/balance-report.md` P0-1) — здесь сознательно НЕТ пересчёта в
+ * мировые координаты: этот слой не знает о канвасе/камере (граница слоёв,
+ * `docs/tech/architecture.md`), только о `window`. Пересчёт `aimScreen` →
+ * `aimWorld` — обёртка `InputSource` в `src/game/demo-scene.ts`
+ * (`renderer.screenToWorld`, симметричная инверсия `PixiRenderer.draw()`).
  */
 
 import { EMPTY_INPUT, type Action, type InputSnapshot } from '../core/input';
@@ -55,7 +65,8 @@ export interface DomInputHandle {
 export function createDomInputSource(target: EventTarget = window): DomInputHandle {
   const heldKeys = new Set<string>();
   const justPressed = new Set<Action>();
-  let aimWorld = { x: 0, y: 0 };
+  /** Сырые экранные координаты курсора (`clientX/clientY`) — см. докстринг `InputSnapshot.aimScreen` в `core/input.ts`. */
+  let aimScreen = { x: 0, y: 0 };
 
   const handleKeyDown = (e: Event): void => {
     const code = (e as KeyboardEvent).code;
@@ -72,7 +83,7 @@ export function createDomInputSource(target: EventTarget = window): DomInputHand
 
   const handleMouseMove = (e: Event): void => {
     const me = e as MouseEvent;
-    aimWorld = { x: me.clientX, y: me.clientY };
+    aimScreen = { x: me.clientX, y: me.clientY };
   };
 
   /** Синтетический «код» кнопки мыши — тот же приём, что `KeyboardEvent.code`, только для `ACTION_KEYS['Mouse0']`. */
@@ -131,7 +142,10 @@ export function createDomInputSource(target: EventTarget = window): DomInputHand
         const pressed = new Set(justPressed);
         justPressed.clear();
 
-        return { moveX, moveY, aimWorld, pressed, held };
+        // `aimWorld` намеренно НЕ вычисляется здесь (см. докстринг файла) —
+        // берётся дефолт `EMPTY_INPUT.aimWorld`; `demo-scene.ts` перезаписывает
+        // его в обёртке `InputSource` через `renderer.screenToWorld`.
+        return { moveX, moveY, aimScreen, aimWorld: EMPTY_INPUT.aimWorld, pressed, held };
       },
     },
     destroy(): void {

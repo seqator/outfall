@@ -59,10 +59,30 @@
  * Полноценного экрана выбора локации в этой волне нет (см. `docs/BACKLOG.md`
  * OF-051) — граф локаций уже полностью проходим через `exits[]` каждой
  * карты, отдельное меню — не критерий готовности задачи.
+ *
+ * OF-056 (P0-1 баланс-прохода, `docs/qa/balance-report.md`): прицеливание
+ * мышью реально работает — раньше `aimWorld` из `dom-input.ts` физически не
+ * читался нигде в `sim`/`game` (направление атаки = направление последнего
+ * WASD-движения, кайтинг был невозможен). `dom-input.ts` теперь отдаёт
+ * только `aimScreen` (сырые `clientX/clientY`); эта сцена — единственный
+ * слой, которому разрешено знать одновременно про `render` и `input`
+ * (см. `aimInput` ниже) — оборачивает `input.source`, пересчитывая
+ * `aimScreen` → `aimWorld` через `renderer.screenToWorld` (обратная
+ * изометрическая проекция камеры, `render/screen-to-world.ts`) ДО того, как
+ * снимок дойдёт до `loop`/`sim.step()`, тем же приёмом, что уже применяет
+ * `applyArenaModifiersToInput`. `sim/systems/combat.ts: handlePlayerFacing`
+ * теперь целится в `aimWorld`, а не в направление движения.
  */
 
 import { createAudioEngine, type AudioEngine } from '../audio';
-import { createEventBus, createLoop, createSeededRng, createWorld, type InputSource } from '../core';
+import {
+  createEventBus,
+  createLoop,
+  createSeededRng,
+  createWorld,
+  type InputSnapshot,
+  type InputSource,
+} from '../core';
 import type { EntityId, World } from '../core/world';
 import {
   MapSchema,
@@ -146,6 +166,14 @@ declare global {
   interface Window {
     __outfallDebug?: {
       getHeroPosition(): { x: number; y: number } | null;
+      /**
+       * Текущее направление взгляда героя (`facing.dirX/dirY`, нормализованный
+       * вектор) — для e2e-теста прицеливания мышью (`tests/e2e/aim.spec.ts`,
+       * OF-056): `page.mouse.move(x, y)` в разные точки экрана должно реально
+       * менять это направление независимо от того, куда/движется ли герой,
+       * без парсинга скриншота/HUD.
+       */
+      getHeroFacing(): { dirX: number; dirY: number } | null;
       /**
        * Мгновенно ставит героя в точку — для e2e-теста диалога
        * (`tests/e2e/dialogue.spec.ts`): реальная геометрия «Трубы» не
@@ -1310,16 +1338,42 @@ export async function createDemoScene(
   const simulation = createSimulation(world);
   const input: DomInputHandle = createDomInputSource(window);
   const raf = createBrowserRaf();
+  // OF-056: `input.source` из `dom-input.ts` заполняет только `aimScreen`
+  // (сырые `clientX/clientY`, см. докстринг файла) — `sim` физически не
+  // читает это поле, ему нужен `aimWorld` (мировые координаты курсора,
+  // `sim/systems/combat.ts: handlePlayerFacing`). Пересчёт — здесь, а не в
+  // `dom-input.ts`/`core`, по той же причине, по которой `applyArenaModifiersToInput`
+  // ниже тоже оборачивает `InputSource`: `demo-scene.ts` — единственный
+  // слой, которому разрешено знать одновременно про `render` (нужен
+  // `renderer.screenToWorld` — обратная камере проекция) и про `input`.
+  // `canvas.getBoundingClientRect()` вычитается здесь (не в `dom-input.ts`,
+  // который не должен знать о геометрии конкретного канваса — только о
+  // `window`-событиях), `camera` читается по актуальному состоянию на
+  // момент КАЖДОГО вызова `snapshot()` (замыкание над `let`-переменной ниже,
+  // объявленной по коду позже — безопасно: тело функции выполняется только
+  // при первом реальном тике, после того как `camera` уже присвоена).
+  const aimInput: InputSource = {
+    snapshot(): InputSnapshot {
+      const raw = input.source.snapshot();
+      const rect = canvas.getBoundingClientRect();
+      const { wx, wy } = renderer.screenToWorld(
+        raw.aimScreen.x - rect.left,
+        raw.aimScreen.y - rect.top,
+        camera,
+      );
+      return { ...raw, aimWorld: { x: wx, y: wy } };
+    },
+  };
   // Модификаторы Арены (OF-039, «без рывка»/«только ножи») — чистая
   // трансформация снимка ввода ДО того, как он доходит до `sim.step()`;
   // `sim` не знает о существовании Арены (`world/arena.ts`, докстринг
   // `applyArenaModifiersToInput`). Без активных модификаторов (обычная
   // кампания, либо Арена без выбранных модификаторов) — тот же самый
-  // `input.source`, ни одной лишней аллокации на тик.
+  // `aimInput`, только пересчёт прицела, без лишней обёртки поверх.
   const simulationInput: InputSource =
     arenaModifiers.length > 0
-      ? { snapshot: () => applyArenaModifiersToInput(input.source.snapshot(), arenaModifiers) }
-      : input.source;
+      ? { snapshot: () => applyArenaModifiersToInput(aimInput.snapshot(), arenaModifiers) }
+      : aimInput;
   const loop = createLoop(simulation, simulationInput, raf);
 
   // Панорама (концепт §6, 3–8 сек): камера стоит на `P` и не следует за
@@ -1774,6 +1828,10 @@ export async function createDemoScene(
     getHeroPosition(): { x: number; y: number } | null {
       const transform = world.store('transform').get(hero);
       return transform ? { x: transform.x, y: transform.y } : null;
+    },
+    getHeroFacing(): { dirX: number; dirY: number } | null {
+      const facing = world.store('facing').get(hero);
+      return facing ? { dirX: facing.dirX, dirY: facing.dirY } : null;
     },
     teleportHero(x: number, y: number): void {
       const transform = world.store('transform').get(hero);
