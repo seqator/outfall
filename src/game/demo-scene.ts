@@ -309,17 +309,22 @@ function resolveInitialMapId(): string {
  * каждого файла и расстановкой NPC на картах `public/data/maps/{garazhi,
  * plotina,paneli}.json`): пять NPC c диалогом — `npc.grinya`/`npc.tolya`
  * («Отработка»), `npc.emissary_chistyh` («Для колодца»), `npc.modest_
- * busygin` («Рубильник»), `npc.palych` («Я кран»). Остальные NPC карт Акта 1
- * (`npc.zoya`, `npc.klavdiya_busygina`, `npc.batya_kot`, `npc.dyadya_gena`,
- * `npc.pereskazchik`, `npc.timofey_rzhavyy`, `npc.tetya_valya`) названы в
- * `docs/narrative/main-quest.md`/`world-bible.md`, но диалоговых сцен под них
- * ещё не написано (`quest.med_dlya_semyorki`/`quest.tolya_chto_dalshe`/
- * `quest.schetchik_i_sovest` в `quests.json` пока без диалогов, только
- * эффекты стадий) — они сознательно «немые»: видны на карте, `E` рядом с
- * ними не находит запись в этом словаре и просто не открывает диалог (см.
- * `findNearestInteractableNpc` ниже — `dialogsByNpcId.get` вернёт `undefined`
- * и кандидат пропускается). Это честная граница контента этой волны, не
- * баг OF-051.
+ * busygin` («Рубильник»), `npc.palych` («Я кран»). Пятая рецензия
+ * duxa-simulator (`duxa-review-vs-5.md`, P2) добавила ещё двух — `npc.zoya`
+ * («Судьба ключа/Родиона», `docs/narrative/main-quest.md` §2 — заглавный
+ * NPC квеста Q2 «Ключ Тарифницы», до этой правки физически немой) и
+ * `npc.pereskazchik` (decor-реплика «Кратко про — банка. Подробно — две»,
+ * одобренная ещё на этапе тон-ревью, `tone-limits.md` правило №8, но так и
+ * не звучавшая в игре). Остальные NPC карт Акта 1 (`npc.klavdiya_busygina`,
+ * `npc.batya_kot`, `npc.dyadya_gena`, `npc.timofey_rzhavyy`, `npc.tetya_
+ * valya`) названы в `docs/narrative/main-quest.md`/`world-bible.md`, но
+ * диалоговых сцен под них ещё не написано (`quest.med_dlya_semyorki`/
+ * `quest.tolya_chto_dalshe`/`quest.schetchik_i_sovest` в `quests.json` пока
+ * без диалогов, только эффекты стадий) — они сознательно «немые»: видны на
+ * карте, `E` рядом с ними не находит запись в этом словаре и просто не
+ * открывает диалог (см. `findNearestInteractableNpc` ниже —
+ * `dialogsByNpcId.get` вернёт `undefined` и кандидат пропускается). Это
+ * честная граница контента этой волны, не баг OF-051.
  */
 const NPC_DIALOG_FILES: Readonly<Record<string, string>> = {
   'npc.sanitar': 'prolog-smotritel',
@@ -329,6 +334,8 @@ const NPC_DIALOG_FILES: Readonly<Record<string, string>> = {
   'npc.emissary_chistyh': 'act1-dlya-kolodtsa',
   'npc.modest_busygin': 'act1-rubilnik',
   'npc.palych': 'act1-ya-kran',
+  'npc.zoya': 'act1-klyuch-zoi',
+  'npc.pereskazchik': 'act1-pereskazchik',
 };
 
 /**
@@ -351,6 +358,12 @@ const ONE_SHOT_DIALOG_RESOLVED_FLAG: Readonly<Record<string, string>> = {
   'npc.emissary_chistyh': 'flag.dlya_kolodtsa',
   'npc.modest_busygin': 'flag.rubilnik',
   'npc.palych': 'flag.palych_ubit',
+  // `flag.zoya_rodion_talk` — выставляется на всех терминальных узлах
+  // `act1-klyuch-zoi.json` независимо от исхода (в отличие от остальных
+  // записей выше, не совпадает по имени с флагом какого-то другого эффекта
+  // — разговор про Родиона не завязан на отдельный сюжетный выбор с
+  // собственным флагом, только на уже существующий `flag.prolog_vybor`).
+  'npc.zoya': 'flag.zoya_rodion_talk',
 };
 
 async function loadDialog(fileName: string): Promise<Dialog> {

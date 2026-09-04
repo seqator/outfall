@@ -1,0 +1,26 @@
+{
+  "id": "dialog.pereskazchik",
+  "npc": "npc.pereskazchik",
+  "start": "start",
+  "nodes": {
+    "start": {
+      "speaker": "npc.pereskazchik",
+      "textKey": "dialog.pereskazchik.start",
+      "choices": [
+        { "textKey": "dialog.pereskazchik.choice.kratko", "next": "kratko" },
+        { "textKey": "dialog.pereskazchik.choice.podrobno", "next": "podrobno" },
+        { "textKey": "dialog.pereskazchik.choice.ne_segodnya", "next": null }
+      ]
+    },
+    "kratko": {
+      "speaker": "npc.pereskazchik",
+      "textKey": "dialog.pereskazchik.kratko",
+      "choices": [{ "textKey": "dialog.pereskazchik.choice.spasibo", "next": null }]
+    },
+    "podrobno": {
+      "speaker": "npc.pereskazchik",
+      "textKey": "dialog.pereskazchik.podrobno",
+      "choices": [{ "textKey": "dialog.pereskazchik.choice.spasibo", "next": null }]
+    }
+  }
+}

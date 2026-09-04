@@ -1,0 +1,119 @@
+{
+  "id": "dialog.klyuch_zoi",
+  "npc": "npc.zoya",
+  "start": "start",
+  "nodes": {
+    "start": {
+      "speaker": "npc.zoya",
+      "textKey": "dialog.klyuch_zoi.start",
+      "choices": [
+        {
+          "textKey": "dialog.klyuch_zoi.choice.pro_rodiona_spas",
+          "next": "rodion_zhiv",
+          "condition": {
+            "op": "any",
+            "conditions": [
+              { "op": "flag", "key": "flag.prolog_vybor", "eq": "spas" },
+              { "op": "flag", "key": "flag.prolog_vybor", "eq": "oba" }
+            ]
+          }
+        },
+        {
+          "textKey": "dialog.klyuch_zoi.choice.pro_rodiona_klyuch",
+          "next": "gde_rodion",
+          "condition": { "op": "flag", "key": "flag.prolog_vybor", "eq": "klyuch" }
+        },
+        {
+          "textKey": "dialog.klyuch_zoi.choice.pro_rodiona_neizvesten",
+          "next": "rodion_neizvesten",
+          "condition": {
+            "op": "not",
+            "condition": {
+              "op": "any",
+              "conditions": [
+                { "op": "flag", "key": "flag.prolog_vybor", "eq": "spas" },
+                { "op": "flag", "key": "flag.prolog_vybor", "eq": "klyuch" },
+                { "op": "flag", "key": "flag.prolog_vybor", "eq": "oba" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "rodion_zhiv": {
+      "speaker": "npc.zoya",
+      "textKey": "dialog.klyuch_zoi.rodion_zhiv",
+      "choices": [
+        {
+          "textKey": "dialog.klyuch_zoi.choice.mnogotochie",
+          "next": null,
+          "effects": [
+            { "op": "incrementFlag", "key": "rep.energosbyt", "amount": 10 },
+            { "op": "setFlag", "key": "flag.zoya_rodion_talk", "value": true }
+          ]
+        }
+      ]
+    },
+    "gde_rodion": {
+      "speaker": "npc.zoya",
+      "textKey": "dialog.klyuch_zoi.gde_rodion",
+      "choices": [
+        {
+          "textKey": "dialog.klyuch_zoi.choice.sovrat",
+          "next": "sovral_reakciya",
+          "check": { "stat": "yazyk", "dc": 5 }
+        },
+        {
+          "textKey": "dialog.klyuch_zoi.choice.pravda",
+          "next": "pravda_reakciya"
+        }
+      ]
+    },
+    "sovral_reakciya": {
+      "speaker": "narrator",
+      "textKey": "dialog.klyuch_zoi.sovral_reakciya",
+      "choices": [
+        {
+          "textKey": "dialog.klyuch_zoi.choice.poverila",
+          "next": null,
+          "condition": { "op": "stat", "stat": "yazyk", "gte": 5 },
+          "effects": [{ "op": "setFlag", "key": "flag.zoya_rodion_talk", "value": true }]
+        },
+        {
+          "textKey": "dialog.klyuch_zoi.choice.ne_poverila",
+          "next": null,
+          "condition": {
+            "op": "not",
+            "condition": { "op": "stat", "stat": "yazyk", "gte": 5 }
+          },
+          "effects": [
+            { "op": "incrementFlag", "key": "rep.energosbyt", "amount": -10 },
+            { "op": "setFlag", "key": "flag.zoya_rodion_talk", "value": true }
+          ]
+        }
+      ]
+    },
+    "pravda_reakciya": {
+      "speaker": "npc.zoya",
+      "textKey": "dialog.klyuch_zoi.pravda_reakciya",
+      "choices": [
+        {
+          "textKey": "dialog.klyuch_zoi.choice.mnogotochie",
+          "next": null,
+          "effects": [{ "op": "setFlag", "key": "flag.zoya_rodion_talk", "value": true }]
+        }
+      ]
+    },
+    "rodion_neizvesten": {
+      "speaker": "npc.zoya",
+      "textKey": "dialog.klyuch_zoi.rodion_neizvesten",
+      "choices": [
+        {
+          "textKey": "dialog.klyuch_zoi.choice.mnogotochie",
+          "next": null,
+          "effects": [{ "op": "setFlag", "key": "flag.zoya_rodion_talk", "value": true }]
+        }
+      ]
+    }
+  }
+}

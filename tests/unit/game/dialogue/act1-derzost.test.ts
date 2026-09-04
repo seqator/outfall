@@ -106,3 +106,108 @@ describe('act1-derzost: «Для колодца» и остальные сцен
     expect(otkazal.state.flags['rep.chistye']).toBe(-10);
   });
 });
+
+/**
+ * P2 из пятой рецензии duxa-simulator (`duxa-review-vs-5.md`): Зоя
+ * Ильинична «Тарифница», заглавный NPC Q2 «Ключ Тарифницы»
+ * (`docs/narrative/main-quest.md` §2, «Судьба ключа/Родиона»), была
+ * физически немой — этот файл появился после её диалога
+ * (`act1-klyuch-zoi.json`). Три ветки по `flag.prolog_vybor`, две из них —
+ * условные choices, а не настоящий выбор игрока (§11.3-style «условие
+ * решает, не игрок» — тот же приём, что уже применяет `updateRodionScene`).
+ */
+describe('act1-klyuch-zoi: три ветки по flag.prolog_vybor', () => {
+  const dialog = loadDialog('act1-klyuch-zoi.json');
+
+  it('spas — благодарность, rep.energosbyt +10, диалог помечен пройденным', () => {
+    const state = createGameState({ flags: { 'flag.prolog_vybor': 'spas' } });
+    const start = viewNode(dialog, 'start', state);
+    // Только одна из трёх веток видна — остальные две скрыты `condition`.
+    expect(start.choices.map((c) => c.textKey)).toEqual(['dialog.klyuch_zoi.choice.pro_rodiona_spas']);
+
+    const afterAsk = pickAndChoose(dialog, 'start', 'dialog.klyuch_zoi.choice.pro_rodiona_spas', state);
+    const afterEnd = pickAndChoose(
+      dialog,
+      afterAsk.nextNodeId!,
+      'dialog.klyuch_zoi.choice.mnogotochie',
+      afterAsk.state,
+    );
+    expect(afterEnd.state.flags['rep.energosbyt']).toBe(10);
+    expect(afterEnd.state.flags['flag.zoya_rodion_talk']).toBe(true);
+  });
+
+  it('klyuch, высокий Язык — соврать удаётся, штрафа нет', () => {
+    const state = createGameState({ flags: { 'flag.prolog_vybor': 'klyuch' } }); // дефолт yazyk=5, dc=5 — проходит
+    const afterAsk = pickAndChoose(dialog, 'start', 'dialog.klyuch_zoi.choice.pro_rodiona_klyuch', state);
+    const afterSovrat = pickAndChoose(
+      dialog,
+      afterAsk.nextNodeId!,
+      'dialog.klyuch_zoi.choice.sovrat',
+      afterAsk.state,
+    );
+    // Реакция — автоматическая (условие на `yazyk`, не выбор игрока).
+    const reaction = viewNode(dialog, afterSovrat.nextNodeId!, afterSovrat.state);
+    expect(reaction.choices.map((c) => c.textKey)).toEqual(['dialog.klyuch_zoi.choice.poverila']);
+    const final = pickAndChoose(dialog, afterSovrat.nextNodeId!, 'dialog.klyuch_zoi.choice.poverila', afterSovrat.state);
+    expect(final.state.flags['rep.energosbyt']).toBeUndefined();
+    expect(final.state.flags['flag.zoya_rodion_talk']).toBe(true);
+  });
+
+  it('klyuch, низкий Язык — соврать не удаётся, rep.energosbyt −10', () => {
+    const state = createGameState({
+      flags: { 'flag.prolog_vybor': 'klyuch' },
+      stats: { karkas: 5, ostrota: 5, smekalka: 5, tvyordost: 5, yazyk: 0, kurazh: 5 },
+    });
+    const afterAsk = pickAndChoose(dialog, 'start', 'dialog.klyuch_zoi.choice.pro_rodiona_klyuch', state);
+    const afterSovrat = pickAndChoose(
+      dialog,
+      afterAsk.nextNodeId!,
+      'dialog.klyuch_zoi.choice.sovrat',
+      afterAsk.state,
+    );
+    const reaction = viewNode(dialog, afterSovrat.nextNodeId!, afterSovrat.state);
+    expect(reaction.choices.map((c) => c.textKey)).toEqual(['dialog.klyuch_zoi.choice.ne_poverila']);
+    const final = pickAndChoose(
+      dialog,
+      afterSovrat.nextNodeId!,
+      'dialog.klyuch_zoi.choice.ne_poverila',
+      afterSovrat.state,
+    );
+    expect(final.state.flags['rep.energosbyt']).toBe(-10);
+    expect(final.state.flags['flag.zoya_rodion_talk']).toBe(true);
+  });
+
+  it('klyuch — сказать правду сразу, без проверки навыка, без штрафа', () => {
+    const state = createGameState({ flags: { 'flag.prolog_vybor': 'klyuch' } });
+    const afterAsk = pickAndChoose(dialog, 'start', 'dialog.klyuch_zoi.choice.pro_rodiona_klyuch', state);
+    const afterPravda = pickAndChoose(
+      dialog,
+      afterAsk.nextNodeId!,
+      'dialog.klyuch_zoi.choice.pravda',
+      afterAsk.state,
+    );
+    const final = pickAndChoose(
+      dialog,
+      afterPravda.nextNodeId!,
+      'dialog.klyuch_zoi.choice.mnogotochie',
+      afterPravda.state,
+    );
+    expect(final.state.flags['rep.energosbyt']).toBeUndefined();
+    expect(final.state.flags['flag.zoya_rodion_talk']).toBe(true);
+  });
+
+  it('сцена Родиона ещё не пройдена — нейтральная ветка, диалог всё равно помечается пройденным', () => {
+    const state = createGameState();
+    const start = viewNode(dialog, 'start', state);
+    expect(start.choices.map((c) => c.textKey)).toEqual(['dialog.klyuch_zoi.choice.pro_rodiona_neizvesten']);
+
+    const afterAsk = pickAndChoose(dialog, 'start', 'dialog.klyuch_zoi.choice.pro_rodiona_neizvesten', state);
+    const final = pickAndChoose(
+      dialog,
+      afterAsk.nextNodeId!,
+      'dialog.klyuch_zoi.choice.mnogotochie',
+      afterAsk.state,
+    );
+    expect(final.state.flags['flag.zoya_rodion_talk']).toBe(true);
+  });
+});
