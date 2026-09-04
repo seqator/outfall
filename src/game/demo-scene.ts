@@ -605,7 +605,16 @@ export async function createDemoScene(
       rodionReleasedUntilMs = now + RODION_RELEASE_MESSAGE_MS;
     }
 
-    if (!rodionResolved && now - rodionSceneStartMs >= RODION_SCENE_DURATION_MS) {
+    // `rodionSnapUntilMs === null` — обязательное условие: `F`, нажатая до
+    // истечения `T_scene`, гарантированно доигрывает свои `T_snap` до конца
+    // (§11.4 — «таймер не обрывает уже начатое действие»). Без этой проверки
+    // таймаут мог сработать в середине уже идущего снятия ключа и подменить
+    // осознанный `klyuch` (`timeout: false`) форс-исходом `timeout: true` —
+    // баг, пойманный живым прогоном `duxa-simulator` (четвёртая рецензия,
+    // `docs/planerka/03-vs/duxa-review-vs-4.md`): нажатие `F` на 13,6–14,4с
+    // истории сцены давало неверный флаг `flag.truba.choice_timeout = true`
+    // и неверный текст исхода, хотя игрок успел осознанно нажать `F`.
+    if (!rodionResolved && rodionSnapUntilMs === null && now - rodionSceneStartMs >= RODION_SCENE_DURATION_MS) {
       resolveRodionOutcome('klyuch', true);
     }
   }

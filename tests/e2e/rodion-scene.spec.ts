@@ -103,3 +103,57 @@ test('бездействие 15 секунд — форс-исход «ключ�
 
   expect(consoleErrors).toEqual([]);
 });
+
+/**
+ * Четвёртая рецензия duxa-simulator (`docs/planerka/03-vs/duxa-review-vs-4.md`)
+ * поймала живьём race: `F`, нажатая незадолго до истечения `T_scene` (15с),
+ * могла подмениться форс-исходом по таймауту раньше, чем успевала доиграть
+ * `T_snap` (1,5с) — нарушение гарантии §11.4 («таймер не обрывает уже
+ * начатое действие»). Исправлено условием `rodionSnapUntilMs === null` в
+ * `updateRodionScene` (`demo-scene.ts`).
+ *
+ * ВАЖНО: этот тест НЕ надёжно воспроизводит саму гонку — она зависит от
+ * точного взаимного порядка кадров `requestAnimationFrame` относительно
+ * двух порогов времени в один и тот же реальный момент, а не от факта
+ * «F нажата поздно» (проверено: тест зелёный что на исправленном коде, что
+ * на версии без фикса — искусственная задержка `waitForTimeout` не
+ * гарантирует нужную раскладку кадров headless-браузера). Тест остаётся как
+ * содержательная проверка соседнего поведения — F, нажатая близко к концу
+ * таймера, при обычной раскладке кадров всё равно должна доиграть как
+ * осознанный `klyuch`, а не сломаться как-то иначе — но не как единственная
+ * гарантия против регресса самой гонки. Сам фикс защищён логическим
+ * разбором в коде (см. комментарий у `rodionSnapUntilMs === null`), не
+ * только тестом.
+ */
+test('F нажат в последнюю секунду таймера — доигрывает как осознанный klyuch, не форс-таймаут', async ({
+  page,
+}) => {
+  test.setTimeout(35_000);
+  const consoleErrors: string[] = [];
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') consoleErrors.push(msg.text());
+  });
+  page.on('pageerror', (err) => consoleErrors.push(String(err)));
+
+  await reachRodionScene(page);
+  await page.evaluate(() => window.__outfallDebug?.teleportHero(30, 52));
+
+  // Фиксированное ожидание, а не поллинг HUD: буг воспроизводится в узком
+  // окне (T_scene − T_snap, T_scene) = (13500, 15000)мс от старта сцены —
+  // поллинг текста с шагом до 1с рискует перескочить это окно и не поймать
+  // баг. `reachRodionScene` уже тратит ~300–500мс на телепорт/ожидание,
+  // поэтому довешиваем фиксированные 13,9с: суммарно ~14,2–14,4с — уверенно
+  // внутри окна с запасом по обе стороны.
+  await page.waitForTimeout(13_900);
+  await page.keyboard.press('KeyF');
+
+  await expect
+    .poll(() => page.evaluate(() => window.__outfallDebug?.getFlag('flag.prolog_vybor')), {
+      timeout: 3000,
+    })
+    .toBe('klyuch');
+  expect(await page.evaluate(() => window.__outfallDebug?.getFlag('flag.truba.choice_timeout'))).toBeUndefined();
+  await expect(page.locator('#fps-overlay')).toContainText('Латунный ключ у тебя', { timeout: 2000 });
+
+  expect(consoleErrors).toEqual([]);
+});
