@@ -36,5 +36,62 @@
       "ignoresArmor": false
     },
     "sliceReady": true
+  },
+  {
+    "id": "enemy.krysa_plastikovaya",
+    "nameKey": "enemy.krysa_plastikovaya.name",
+    "role": "rusher",
+    "hp": 8,
+    "armor": 0,
+    "attack": {
+      "nameKey": "enemy.krysa_plastikovaya.attack.name",
+      "telegraphMs": 300,
+      "damage": 6,
+      "cooldownMs": 900
+    },
+    "weakness": {
+      "nameKey": "enemy.krysa_plastikovaya.weakness.name",
+      "multiplier": 1.5,
+      "ignoresArmor": false
+    },
+    "sliceReady": false
+  },
+  {
+    "id": "enemy.avtomat_nii",
+    "nameKey": "enemy.avtomat_nii.name",
+    "role": "turret",
+    "hp": 35,
+    "armor": 8,
+    "attack": {
+      "nameKey": "enemy.avtomat_nii.attack.name",
+      "telegraphMs": 500,
+      "damage": 16,
+      "cooldownMs": 2000
+    },
+    "weakness": {
+      "nameKey": "enemy.avtomat_nii.weakness.name",
+      "multiplier": 2.5,
+      "ignoresArmor": true
+    },
+    "sliceReady": false
+  },
+  {
+    "id": "enemy.boss_zadvizhka",
+    "nameKey": "enemy.boss_zadvizhka.name",
+    "role": "boss",
+    "hp": 400,
+    "armor": 10,
+    "attack": {
+      "nameKey": "enemy.boss_zadvizhka.attack.name",
+      "telegraphMs": 500,
+      "damage": 25,
+      "cooldownMs": 4000
+    },
+    "weakness": {
+      "nameKey": "enemy.boss_zadvizhka.weakness.name",
+      "multiplier": 3,
+      "ignoresArmor": true
+    },
+    "sliceReady": false
   }
 ]

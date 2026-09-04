@@ -7066,6 +7066,14 @@
         "y": 17
       },
       "toMap": "map.plotina"
+    },
+    {
+      "id": "exit_to_nii",
+      "position": {
+        "x": 44,
+        "y": 4
+      },
+      "toMap": "map.nii"
     }
   ]
 }
