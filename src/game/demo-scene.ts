@@ -108,6 +108,7 @@ import {
   type SaveState,
 } from './save';
 import { createDevTestMap } from './world/dev-fixtures';
+import { resolveEnding, type EndingResult } from './world/endings';
 import {
   createHero,
   findSpawnPoint,
@@ -977,6 +978,10 @@ export async function createDemoScene(
   let finalValveReleasedUntilMs: number | null = null;
   let finalValveOutcomeMessage: string | null = null;
   let finalValveOutcomeUntilMs: number | null = null;
+  /** Разрешённая концовка (`world/endings.ts`) — не `null` с момента исхода сцены задвижки до конца сессии; переводит HUD в постоянный экран (см. `loop.onFrame`). */
+  let finalEnding: EndingResult | null = null;
+  /** Гвард на однократную остановку `loop` после того, как экран концовки реально отрисовался хотя бы один кадр — без него `loop.stop()` замер бы игру на кадре ДО текста концовки. */
+  let gameEndedShown = false;
 
   function isHeroNearFinalValve(): boolean {
     const heroT = world.store('transform').get(hero);
@@ -1004,6 +1009,18 @@ export async function createDemoScene(
     gameState = applyEffects(gameState, effects);
     finalValveOutcomeMessage = message;
     finalValveOutcomeUntilMs = performance.now() + FINAL_VALVE_OUTCOME_MESSAGE_MS;
+
+    // Найдено шестой рецензией duxa-simulator (P0, `duxa-review-vs-6.md`):
+    // до этой правки `flag.truba_deystviye` фиксировался без проверки
+    // репутации, и вообще никакого экрана-итога не было — сцена
+    // заканчивалась, игра просто продолжала идти дальше. `resolveEnding`
+    // (`world/endings.ts`) — честное разрешение одной из 5 концовок
+    // `main-quest.md` §5 по уже применённым выше флагам; `finalEnding`
+    // переводит HUD в постоянный текст-экран конца игры (см. композицию
+    // HUD в `loop.onFrame`), а не в очередную временную строку, как у
+    // остальных исходов этой сцены.
+    const deystviye = gameState.flags['flag.truba_deystviye'];
+    finalEnding = resolveEnding(typeof deystviye === 'string' ? deystviye : undefined, gameState.flags);
   }
 
   function resolveFinalValveHoldOutcome(): void {
@@ -1481,6 +1498,25 @@ export async function createDemoScene(
     if (heroDeadSinceMs !== null) hud = 'ВЫ ПОГИБЛИ… возрождение | ' + hud;
     if (hintUntilMs !== null && performance.now() < hintUntilMs) {
       hud = 'WASD — идти, ЛКМ — стрелять, E — говорить, I — инвентарь | ' + hud;
+    }
+    // Экран конца игры (`finalEnding`, найдено 6-й рецензией — до этой
+    // правки его не было вовсе) — высший приоритет, полностью заменяет
+    // обычный HUD, а не дописывается к нему. Показывается, как только
+    // временная строка исхода сцены задвижки (`computeFinalValveHud`)
+    // истекла (`finalValveOutcomeUntilMs === null` — уже обнулено вызовом
+    // `computeFinalValveHud` выше). `loop.stop()` — только ПОСЛЕ того, как
+    // этот текст реально попал в DOM хотя бы на одном кадре, иначе игра
+    // замерла бы на предыдущем кадре (ещё с временной строкой исхода), а
+    // не на экране концовки.
+    if (finalEnding !== null && finalValveOutcomeUntilMs === null) {
+      hud = `КОНЕЦ ИГРЫ — «${finalEnding.title}». ${finalEnding.summary}`;
+      fpsOverlay.update(fps);
+      fpsOverlay.element.textContent = hud;
+      if (!gameEndedShown) {
+        gameEndedShown = true;
+        loop.stop();
+      }
+      return;
     }
     fpsOverlay.update(fps);
     fpsOverlay.element.textContent = hud;

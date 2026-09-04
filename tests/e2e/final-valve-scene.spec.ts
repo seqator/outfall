@@ -67,6 +67,54 @@ test('присяга Энергосбыту → держать E у задвиж
   expect(consoleErrors).toEqual([]);
 });
 
+/**
+ * Регрессия на P0 из шестой рецензии duxa-simulator (`duxa-review-vs-6.md`):
+ * до фикса `flag.truba_deystviye` фиксировался без проверки репутации —
+ * «Второй сброс» получался и с `rep.energosbyt = 0`, и никакого экрана-
+ * итога не было вовсе. Тот же сценарий, что и предыдущий тест (присяга
+ * Энергосбыту БЕЗ единого действия, повышающего `rep.energosbyt`, — флаг
+ * стартует с 0), но здесь проверяется постоянный экран конца игры
+ * (`world/endings.ts`, `resolveEnding`): при `rep.energosbyt < 60` исход
+ * должен честно понижаться до «Чугунный век», а не показывать «Второй
+ * сброс», которого игрок не заслужил.
+ */
+test('присяга Энергосбыту без репутации → честный экран «Чугунный век», не «Второй сброс»', async ({ page }) => {
+  test.setTimeout(30_000);
+  const consoleErrors: string[] = [];
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') consoleErrors.push(msg.text());
+  });
+  page.on('pageerror', (err) => consoleErrors.push(String(err)));
+
+  await reachFinalValveScene(page);
+  expect(await page.evaluate(() => window.__outfallDebug?.getFlag('rep.energosbyt'))).toBeUndefined();
+
+  await page.evaluate(() => window.__outfallDebug?.teleportHero(20, 21));
+  await page.keyboard.press('KeyE');
+  await page.getByRole('button', { name: 'Присягаю Энергосбыту.' }).click();
+  await page.getByRole('button', { name: '...' }).click();
+
+  await page.evaluate(() => window.__outfallDebug?.teleportHero(21, 5));
+  await expect(page.locator('#fps-overlay')).toContainText('Задвижка перед тобой', { timeout: 5000 });
+
+  await page.keyboard.down('KeyE');
+  await page.waitForTimeout(7_500);
+  await page.keyboard.up('KeyE');
+
+  await expect
+    .poll(() => page.evaluate(() => window.__outfallDebug?.getFlag('flag.truba_deystviye')), {
+      timeout: 3000,
+    })
+    .toBe('vtoroy_sbros'); // физическое действие честно записано...
+
+  // ...но постоянный экран конца игры (после того, как временная строка
+  // исхода истекла) обязан понизить это до дефолта — не «Второй сброс».
+  await expect(page.locator('#fps-overlay')).toContainText('КОНЕЦ ИГРЫ — «Чугунный век»', { timeout: 6000 });
+  await expect(page.locator('#fps-overlay')).not.toContainText('Второй сброс');
+
+  expect(consoleErrors).toEqual([]);
+});
+
 test('присяга Энергосбыту → F доводит вентиль до метки («по счётчику»)', async ({ page }) => {
   test.setTimeout(30_000);
   const consoleErrors: string[] = [];
