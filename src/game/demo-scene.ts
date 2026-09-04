@@ -305,7 +305,13 @@ function attachCombatComponents(world: World, hero: EntityId, initialWeapon?: We
   // компоненты нужны заранее, чтобы `combatSystem`/`ai.ts`/`player-damage.ts`
   // могли их читать без дополнительных проверок «а есть ли компонент вообще»
   // на каждый новый сейв/тест.
-  world.store('progression').add(hero, { xp: 0, level: 1, skillPoints: 0, smekalka: PLAYER_DEFAULT_SMEKALKA });
+  world.store('progression').add(hero, {
+    xp: 0,
+    level: 1,
+    skillPoints: 0,
+    skillPointCursor: 0,
+    smekalka: PLAYER_DEFAULT_SMEKALKA,
+  });
   world.store('perks').add(hero, { unlockedPerkIds: [], lastStandAvailable: true, guaranteedCritPending: false });
 }
 

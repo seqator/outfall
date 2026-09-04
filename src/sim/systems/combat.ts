@@ -19,7 +19,10 @@
  * `player-damage.ts` при входящем ударе и потребляется здесь, в
  * `performRangedAttack`, гарантированным критом следующего выстрела. Убийство
  * врага игроком начисляет опыт (`formulas/progression.ts`) через
- * `grantKillXp`, если у убийцы есть компонент `progression`.
+ * `grantKillXp`, если у убийцы есть компонент `progression`; с OF-059
+ * (`docs/design/progression-of-059.md`) левел-ап там же поднимает
+ * `health.maxHp`/`hp` и раздаёт очки навыков в `combatSkills` — уровень
+ * героя больше не косметика.
  *
  * OF-057 (P0-3 баланс-прохода, `docs/qa/balance-report.md`): перезарядка
  * больше не пополняет магазин безусловно до полного — она ограничена
@@ -49,7 +52,7 @@ import { computeDamage, computeFistsDamage } from '../formulas/damage';
 import { computeIframesMs, DASH_COOLDOWN_MS } from '../formulas/dash';
 import { ENEMY_DEFS } from '../formulas/enemies';
 import { aggregatePerkEffects, EMPTY_PERK_EFFECT, type PerkEffect } from '../formulas/perks';
-import { grantXp, xpForEnemyKill } from '../formulas/progression';
+import { grantXp, maxHpForLevel, skillPointsPerLevel, spendSkillPoints, xpForEnemyKill } from '../formulas/progression';
 import { computeSpreadDeg } from '../formulas/spread';
 import {
   PROJECTILE_HIT_RADIUS_M,
@@ -70,16 +73,49 @@ function getPlayerPerkEffect(world: World, ownerId: EntityId): PerkEffect {
   return perks ? aggregatePerkEffects(perks.unlockedPerkIds) : EMPTY_PERK_EFFECT;
 }
 
-/** Начисляет опыт убийце врага (`ENEMY_DEFS[...].xpLevel/danger`, `rpg-system.md` §4) — no-op, если у убийцы нет компонента `progression` (например, снаряд без владельца-героя в синтетических тестах). */
+/**
+ * Начисляет опыт убийце врага (`ENEMY_DEFS[...].xpLevel/danger`,
+ * `rpg-system.md` §4) — no-op, если у убийцы нет компонента `progression`
+ * (например, снаряд без владельца-героя в синтетических тестах).
+ *
+ * OF-059 (`docs/design/progression-of-059.md`): при левел-апе (`levelsGained
+ * > 0`) уровень героя перестаёт быть косметическим числом —
+ * `health.maxHp`/`health.hp` растут на дельту `maxHpForLevel` (§1, левел-ап
+ * лечит на ту же величину, не только расширяет потолок), а очки навыков,
+ * которые раньше просто копились в `progression.skillPoints`, немедленно
+ * раздаются по кругу `guns → heavy → fists` (`spendSkillPoints`, §2) — банка
+ * «на будущее» больше нет, `skillPoints` остаётся лишь счётчиком «всего
+ * заработано».
+ */
 function grantKillXp(world: World, killerId: EntityId, deadEnemyDefId: keyof typeof ENEMY_DEFS): void {
   const progression = world.store('progression').get(killerId);
   if (!progression) return;
   const def = ENEMY_DEFS[deadEnemyDefId];
   const amount = xpForEnemyKill(def.xpLevel, def.danger);
+  const oldLevel = progression.level;
   const result = grantXp(progression, amount, progression.smekalka);
   progression.xp = result.state.xp;
   progression.level = result.state.level;
   progression.skillPoints = result.state.skillPoints;
+
+  if (result.levelsGained <= 0) return;
+
+  const health = world.store('health').get(killerId);
+  if (health) {
+    const hpDelta = maxHpForLevel(result.state.level) - maxHpForLevel(oldLevel);
+    health.maxHp += hpDelta;
+    health.hp += hpDelta;
+  }
+
+  const combatSkills = world.store('combatSkills').get(killerId);
+  if (combatSkills) {
+    const gainedSkillPoints = result.levelsGained * skillPointsPerLevel(progression.smekalka);
+    const spend = spendSkillPoints(gainedSkillPoints, progression.skillPointCursor, combatSkills);
+    combatSkills.guns = spend.skills.guns;
+    combatSkills.heavy = spend.skills.heavy;
+    combatSkills.fists = spend.skills.fists;
+    progression.skillPointCursor = spend.cursor;
+  }
 }
 
 const WEAPON_SLOT1 = WEAPON_SLOT_ORDER[0] as WeaponId;

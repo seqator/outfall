@@ -1111,7 +1111,7 @@ describe('sim/systems/combat: OF-035 — перки героя, читаемые
 
 describe('sim/systems/combat: OF-035 — начисление опыта убийце (formulas/progression.ts)', () => {
   function addProgression(world: World, hero: EntityId): void {
-    world.store('progression').add(hero, { xp: 0, level: 1, skillPoints: 0, smekalka: 5 });
+    world.store('progression').add(hero, { xp: 0, level: 1, skillPoints: 0, skillPointCursor: 0, smekalka: 5 });
   }
 
   it('убийство врага снарядом начисляет опыт по xpLevel/danger врага', () => {
@@ -1167,7 +1167,9 @@ describe('sim/systems/combat: OF-035 — начисление опыта уби�
   it('накопленный опыт левелапит героя, если суммарно хватает (несколько убийств)', () => {
     const world = build(fakeRng(NO_SPREAD_NO_CRIT));
     const hero = addHero(world, 0, 0);
-    world.store('progression').add(hero, { xp: 290, level: 1, skillPoints: 0, smekalka: 6 });
+    world
+      .store('progression')
+      .add(hero, { xp: 290, level: 1, skillPoints: 0, skillPointCursor: 0, smekalka: 6 });
     const enemy = spawnEnemy(world, 'enemy.raki', { x: 0.2, y: 0 }); // xpForEnemyKill = 10 → 290+10=300=порог ур.2
     const health = world.store('health').get(enemy);
     if (health) health.hp = 1;
@@ -1178,5 +1180,59 @@ describe('sim/systems/combat: OF-035 — начисление опыта уби�
     expect(progression?.xp).toBe(300);
     expect(progression?.level).toBe(2);
     expect(progression?.skillPoints).toBe(12); // 6 + Смекалка(6)
+  });
+});
+
+describe('sim/systems/combat: OF-059 — левел-ап растит maxHp/hp и раздаёт combatSkills (progression-of-059.md §1/§2)', () => {
+  /** Смекалка 5 (§2 документа: `skillPointsPerLevel(5) = 11`), герой стартует с `maxHp`/`combatSkills`, зашитыми `demo-scene.ts` (80/50/50/50) — та же исходная точка, что и в реальной игре. */
+  function addLevelingHero(world: World): { hero: EntityId; enemy: EntityId } {
+    const hero = addHero(world, 0, 0, { hp: 80 });
+    world
+      .store('progression')
+      .add(hero, { xp: 290, level: 1, skillPoints: 0, skillPointCursor: 0, smekalka: 5 });
+    // xpForEnemyKill(enemy.raki: xpLevel=1, danger=0) = 10 → 290+10=300=порог уровня 2.
+    const enemy = spawnEnemy(world, 'enemy.raki', { x: 0.2, y: 0 });
+    const health = world.store('health').get(enemy);
+    if (health) health.hp = 1; // один выстрел добивает
+    return { hero, enemy };
+  }
+
+  it('уровень 1→2: health.maxHp === 90, health.hp выросло ровно на дельту (не капнулось на старом потолке)', () => {
+    const world = build(fakeRng(NO_SPREAD_NO_CRIT));
+    const { hero } = addLevelingHero(world);
+
+    combatSystem(world, 1 / 60, attackInput());
+
+    const health = world.store('health').get(hero);
+    expect(world.store('progression').get(hero)?.level).toBe(2);
+    expect(health?.maxHp).toBe(90); // maxHpForLevel(2) = 40 + 8×5 + 10×1 = 90
+    expect(health?.hp).toBe(90); // было 80, +10 (та же дельта, что и maxHp) — левел-ап лечит
+  });
+
+  it('уровень 1→2: combatSkills распределяются по кругу от cursor=0 — ровно первая строка таблицы §2 (guns:54, heavy:54, fists:53)', () => {
+    const world = build(fakeRng(NO_SPREAD_NO_CRIT));
+    const { hero } = addLevelingHero(world);
+
+    combatSystem(world, 1 / 60, attackInput());
+
+    const combatSkills = world.store('combatSkills').get(hero);
+    expect(combatSkills).toEqual({ guns: 54, heavy: 54, fists: 53 });
+    expect(world.store('progression').get(hero)?.skillPointCursor).toBe(2); // 11 очков от 0: следующий cursor = 11 % 3 = 2
+  });
+
+  it('ранение без убийства (нет левел-апа) не трогает maxHp/hp/combatSkills', () => {
+    const world = build(fakeRng(NO_SPREAD_NO_CRIT));
+    const hero = addHero(world, 0, 0, { hp: 80 });
+    world
+      .store('progression')
+      .add(hero, { xp: 0, level: 1, skillPoints: 0, skillPointCursor: 0, smekalka: 5 });
+    spawnEnemy(world, 'enemy.raki', { x: 0.2, y: 0 }); // ХП 40, один выстрел не убивает
+
+    combatSystem(world, 1 / 60, attackInput());
+
+    const health = world.store('health').get(hero);
+    expect(health?.maxHp).toBe(80);
+    expect(health?.hp).toBe(80);
+    expect(world.store('combatSkills').get(hero)).toEqual({ guns: 50, heavy: 50, fists: 50 });
   });
 });

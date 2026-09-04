@@ -47,6 +47,7 @@ function buildCombatHero(world: World): number {
   world.store('attributes').add(hero, { courage: 5, reflex: 5 });
   world.store('combatSkills').add(hero, { guns: 50, heavy: 50, fists: 50 });
   world.store('dashState').add(hero, { iframesRemainingMs: 0, cooldownRemainingMs: 0 });
+  world.store('progression').add(hero, { xp: 0, level: 1, skillPoints: 0, skillPointCursor: 0, smekalka: 5 });
   return hero;
 }
 

@@ -85,6 +85,7 @@ export interface MapGridComponent {
 import type { EntityId } from '../../core/world';
 import type { EnemyDefId } from '../formulas/enemies';
 import type { PerkId } from '../formulas/perks';
+import type { SkillPointCursor } from '../formulas/progression';
 import type { WeaponId } from '../formulas/weapons';
 
 /** Здоровье/броня — общий компонент для героя и врагов (§4.1 combat.md). */
@@ -205,11 +206,25 @@ export interface EnemyComponent {
  * `formulas/perks.ts`).
  */
 
-/** Опыт/уровень/неизрасходованные очки навыков героя (`rpg-system.md` §4). `smekalka` — снимок характеристики Смекалка на момент начисления опыта (формула очков навыков за уровень, §1.3/§2); хранится здесь, а не в `AttributesComponent`, чтобы не тянуть в бой (и в сейв-схему OF-019) характеристику, боевым формулам §4 combat.md не нужную. */
+/**
+ * Опыт/уровень героя (`rpg-system.md` §4). `smekalka` — снимок характеристики
+ * Смекалка на момент начисления опыта (формула очков навыков за уровень,
+ * §1.3/§2); хранится здесь, а не в `AttributesComponent`, чтобы не тянуть в
+ * бой (и в сейв-схему OF-019) характеристику, боевым формулам §4 combat.md не
+ * нужную.
+ *
+ * OF-059 (`docs/design/progression-of-059.md` §2): `skillPoints` больше не
+ * «неизрасходованный банк» — очки конвертируются в `combatSkills` в тот же
+ * тик, что начислены (`grantKillXp`, `sim/systems/combat.ts`), поле — лишь
+ * монотонный счётчик «всего заработано за игру». `skillPointCursor` —
+ * персистентная позиция круговой раздачи (`formulas/progression.ts:
+ * spendSkillPoints`), переживает между уровнями.
+ */
 export interface ProgressionComponent {
   xp: number;
   level: number;
   skillPoints: number;
+  skillPointCursor: SkillPointCursor;
   smekalka: number;
 }
 

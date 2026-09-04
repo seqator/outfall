@@ -9,6 +9,15 @@
  * (`src/sim/systems/combat.ts`) мутирует объекты компонентов на месте каждый
  * тик, так что снимок обязан быть независимой копией в момент вызова —
  * иначе «сохранение» продолжало бы меняться вместе с миром.
+ *
+ * OF-059 (`docs/design/progression-of-059.md`): `progression` (xp/level/
+ * skillPoints/skillPointCursor/smekalka) снимается и восстанавливается
+ * симметрично остальным боевым компонентам — до этой правки уровень героя
+ * ни на что не влиял, поэтому не сохранялся вовсе; теперь `grantKillXp`
+ * (`sim/systems/combat.ts`) считает дельту `maxHp`/`combatSkills` от
+ * `progression.level`, и без сохранения самого компонента загрузка
+ * откатывала бы его на уровень 1, а следующий левел-ап задвоил бы уже
+ * восстановленные из сейва `health.maxHp`/`combatSkills`.
  */
 
 import type { EntityId, World } from '../../core/world';
@@ -35,6 +44,7 @@ export function captureHeroSave(world: World, hero: EntityId): HeroSave {
   const attributes = requireComponent(world.store('attributes').get(hero), 'attributes');
   const combatSkills = requireComponent(world.store('combatSkills').get(hero), 'combatSkills');
   const dashState = requireComponent(world.store('dashState').get(hero), 'dashState');
+  const progression = requireComponent(world.store('progression').get(hero), 'progression');
 
   return {
     x: transform.x,
@@ -48,6 +58,13 @@ export function captureHeroSave(world: World, hero: EntityId): HeroSave {
     dashState: {
       iframesRemainingMs: dashState.iframesRemainingMs,
       cooldownRemainingMs: dashState.cooldownRemainingMs,
+    },
+    progression: {
+      xp: progression.xp,
+      level: progression.level,
+      skillPoints: progression.skillPoints,
+      skillPointCursor: progression.skillPointCursor,
+      smekalka: progression.smekalka,
     },
   };
 }
@@ -74,6 +91,13 @@ export function applyHeroSave(world: World, hero: EntityId, save: HeroSave): voi
   world.store('dashState').add(hero, {
     iframesRemainingMs: save.dashState.iframesRemainingMs,
     cooldownRemainingMs: save.dashState.cooldownRemainingMs,
+  });
+  world.store('progression').add(hero, {
+    xp: save.progression.xp,
+    level: save.progression.level,
+    skillPoints: save.progression.skillPoints,
+    skillPointCursor: save.progression.skillPointCursor,
+    smekalka: save.progression.smekalka,
   });
 }
 

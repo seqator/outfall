@@ -25,7 +25,7 @@ import { WEAPON_SLOT_ORDER, type WeaponId } from '../../sim';
 import { EQUIPMENT_SLOT_IDS, type EquipmentSlotId } from '../inventory/types';
 
 /** Текущая версия формата сейва. См. `migrations.ts` — переходы от более старых версий. */
-export const CURRENT_SAVE_SCHEMA_VERSION = 2 as const;
+export const CURRENT_SAVE_SCHEMA_VERSION = 3 as const;
 
 // ---------------------------------------------------------------------------
 // Инвентарь (форма зеркалит `src/game/inventory/types.ts`, без импорта его
@@ -98,6 +98,28 @@ export type WeaponsSave = z.infer<typeof WeaponsSaveSchema>;
 // продолжил бой теми же формулами после загрузки (`docs/design/combat.md`).
 // ---------------------------------------------------------------------------
 
+/**
+ * OF-059 (`docs/design/progression-of-059.md`): опыт/уровень героя
+ * (`ProgressionComponent`, `sim/components`) до этой правки не сохранялся
+ * вовсе — только его боевые следствия (`hero.maxHp`/`combatSkills` ниже),
+ * потому что уровень ни на что не влиял (P0-5 `balance-report.md`). Теперь
+ * влияет: без сохранения `xp`/`level`/`skillPoints`/`skillPointCursor` сам
+ * компонент после загрузки откатывался бы на уровень 1 с нулевым опытом,
+ * а `health.maxHp`/`combatSkills` остались бы уже поднятыми из сейва —
+ * следующий левел-ап посчитал бы дельту от заниженного `oldLevel` и удвоил
+ * бы прирост. `schemaVersion` поднята до 3 (`migrations.ts`: `v2 → v3`
+ * достраивает поле дефолтами уровня 1 — той же формой допущения, что уже
+ * применена в `v1 → v2`).
+ */
+const ProgressionSaveSchema = z.object({
+  xp: z.number().nonnegative(),
+  level: z.number().int().min(1).max(14),
+  skillPoints: z.number().nonnegative(),
+  skillPointCursor: z.union([z.literal(0), z.literal(1), z.literal(2)]),
+  smekalka: z.number(),
+});
+export type ProgressionSave = z.infer<typeof ProgressionSaveSchema>;
+
 const HeroSaveSchema = z.object({
   x: z.number(),
   y: z.number(),
@@ -111,6 +133,7 @@ const HeroSaveSchema = z.object({
     iframesRemainingMs: z.number().nonnegative(),
     cooldownRemainingMs: z.number().nonnegative(),
   }),
+  progression: ProgressionSaveSchema,
 });
 export type HeroSave = z.infer<typeof HeroSaveSchema>;
 

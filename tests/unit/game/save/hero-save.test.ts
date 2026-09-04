@@ -25,6 +25,9 @@ function buildWorldWithHero(): { world: World; hero: number } {
   world.store('combatSkills').add(hero, { guns: 60, heavy: 40, fists: 30 });
   world.store('dashState').add(hero, { iframesRemainingMs: 0, cooldownRemainingMs: 300 });
   world.store('weapons').add(hero, createWeaponsComponent());
+  world
+    .store('progression')
+    .add(hero, { xp: 120, level: 2, skillPoints: 12, skillPointCursor: 1, smekalka: 5 });
   return { world, hero };
 }
 
@@ -42,6 +45,7 @@ describe('hero-save: captureHeroSave / applyHeroSave', () => {
       attributes: { courage: 6, reflex: 4 },
       combatSkills: { guns: 60, heavy: 40, fists: 30 },
       dashState: { iframesRemainingMs: 0, cooldownRemainingMs: 300 },
+      progression: { xp: 120, level: 2, skillPoints: 12, skillPointCursor: 1, smekalka: 5 },
     });
   });
 
@@ -66,6 +70,7 @@ describe('hero-save: captureHeroSave / applyHeroSave', () => {
       attributes: { courage: 5, reflex: 5 },
       combatSkills: { guns: 50, heavy: 50, fists: 50 },
       dashState: { iframesRemainingMs: 100, cooldownRemainingMs: 0 },
+      progression: { xp: 300, level: 3, skillPoints: 22, skillPointCursor: 2, smekalka: 5 },
     });
     const transform = world.store('transform').get(hero);
     expect(transform).toEqual({ x: 20, y: 21, z: 0, prevX: 20, prevY: 21 });
@@ -73,6 +78,13 @@ describe('hero-save: captureHeroSave / applyHeroSave', () => {
     expect(world.store('dashState').get(hero)).toEqual({
       iframesRemainingMs: 100,
       cooldownRemainingMs: 0,
+    });
+    expect(world.store('progression').get(hero)).toEqual({
+      xp: 300,
+      level: 3,
+      skillPoints: 22,
+      skillPointCursor: 2,
+      smekalka: 5,
     });
   });
 

@@ -29,6 +29,7 @@ function buildSave(overrides: Partial<SaveState> = {}): SaveState {
       attributes: { courage: 5, reflex: 5 },
       combatSkills: { guns: 50, heavy: 50, fists: 50 },
       dashState: { iframesRemainingMs: 0, cooldownRemainingMs: 120 },
+      progression: { xp: 0, level: 1, skillPoints: 0, skillPointCursor: 0, smekalka: 5 },
     },
     weapons: {
       equipped: 'item.pistol_ogryzok',
