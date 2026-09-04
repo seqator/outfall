@@ -7,17 +7,19 @@
  * `ui/dialogue` не знает о существовании этого файла, всё взаимодействие —
  * через колбэки `DialogueHandlers`.
  *
- * Не входит в OF-018 (см. отчёт задачи, «что осталось для интеграции»):
- * привязка к `GameLoop`/сценам (когда открывать короб диалога поверх
- * игрового мира, откуда брать реальный `GameState` игрока/сейва, i18n
- * вместо сырых `textKey`) — эта задача не создаёт сцен, ей ещё неоткуда
- * брать `World` (см. `docs/tech/architecture.md` §3–4, OF-015/019/027).
- * `createDialogueScreen` — уже готовый контракт «дай состояние — получи
- * DOM», который такая обвязка сможет использовать без изменений.
+ * Резолвит `speaker`/`textKey` через `I18n` (`src/game/i18n`, OF-019/025) —
+ * `t` обязателен, а не опционален: показывать сырые ключи в UI по умолчанию
+ * значило бы повторить баг, который поймала рецензия OF-030 (диалоговое
+ * окно показывало `NPC.SANITAR`/`dialog.prolog_smotritel.start` вместо
+ * текста). `speaker` в `DialogNode` — это id NPC (`npc.sanitar`, тот же, что
+ * `dialog.npc`), а не готовый ключ локализации — имя резолвится по
+ * конвенции `<npcId>.name` (см. `public/data/i18n/ru.json`, задаётся
+ * level-designer вместе с `npcs[].id` карты).
  */
 
 import type { Dialog } from '../../data/schemas/dialog';
 import { createDialoguePanel, type DialogueHandlers, type DialogueViewModel } from '../../ui/dialogue';
+import type { I18n } from '../i18n';
 import { formatCheckLabel } from './check-labels';
 import { choose, viewNode, type DialogueNodeView } from './dialog-runner';
 import type { GameState } from './interpreter';
@@ -35,15 +37,14 @@ export interface DialogueScreen {
   destroy(): void;
 }
 
-function toViewModel(nodeView: DialogueNodeView): DialogueViewModel {
+function toViewModel(nodeView: DialogueNodeView, t: I18n['t']): DialogueViewModel {
   return {
-    // TODO(OF-019): резолвить speaker/textKey через I18n, когда он появится; пока — сырой ключ контента, как `toItemView` в `game/inventory/screen.ts`.
-    speakerName: nodeView.speaker,
-    text: nodeView.textKey,
+    speakerName: t(`${nodeView.speaker}.name`),
+    text: t(nodeView.textKey),
     ended: nodeView.ended,
     choices: nodeView.choices.map((choice) => ({
       choiceIndex: choice.choiceIndex,
-      text: choice.textKey,
+      text: t(choice.textKey),
       ...(choice.check
         ? { checkLabel: formatCheckLabel(choice.check), checkPassed: choice.check.passed }
         : {}),
@@ -55,13 +56,14 @@ export function createDialogueScreen(
   root: HTMLElement,
   dialog: Dialog,
   initialState: GameState,
+  t: I18n['t'],
   options: DialogueScreenOptions = {},
 ): DialogueScreen {
   let state = initialState;
   let nodeId = dialog.start;
 
   function refresh(): void {
-    panel.update(toViewModel(viewNode(dialog, nodeId, state)));
+    panel.update(toViewModel(viewNode(dialog, nodeId, state), t));
   }
 
   const handlers: DialogueHandlers = {

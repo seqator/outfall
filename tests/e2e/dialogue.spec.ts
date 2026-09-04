@@ -36,11 +36,14 @@ test('подход к Санитару и E открывает диалог, в�
 
   await page.keyboard.press('KeyE');
 
-  // Диалоговый короб — единственный `<button>` с текстом реплики на экране;
-  // i18n ещё не резолвит `textKey` (OF-018 TODO), поэтому речь идёт сырыми
-  // ключами контента — достаточно проверить, что короб появился и в нём
-  // читаемый вариант ответа.
-  const defaultChoice = page.getByRole('button', { name: /choice\.default/ });
+  // Диалоговый короб показывает переведённый текст, а не сырые ключи
+  // контента — регрессия ровно на баг из `docs/planerka/03-vs/
+  // duxa-review-vs.md` п.1 (`NPC.SANITAR`/`dialog.prolog_smotritel.start`
+  // вместо текста): имя говорящего резолвится через `npc.sanitar.name`.
+  const dialogueBox = page.getByText('Санитар', { exact: true });
+  await expect(dialogueBox).toBeVisible({ timeout: 3000 });
+
+  const defaultChoice = page.getByRole('button', { name: /Понял\. Иду к решётке\./ });
   await expect(defaultChoice).toBeVisible({ timeout: 3000 });
 
   await defaultChoice.click();

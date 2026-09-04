@@ -54,7 +54,7 @@ test('меню → локация → бой → диалог → сохране
   await page.evaluate(() => window.__outfallDebug?.teleportHero(38, 23));
   await expect(hud).toContainText('[E]', { timeout: 3000 });
   await page.keyboard.press('KeyE');
-  const defaultChoice = page.getByRole('button', { name: /choice\.default/ });
+  const defaultChoice = page.getByRole('button', { name: /Понял\. Иду к решётке\./ });
   await expect(defaultChoice).toBeVisible({ timeout: 3000 });
   await defaultChoice.click();
   await expect(defaultChoice).toHaveCount(0);

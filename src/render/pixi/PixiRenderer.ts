@@ -65,6 +65,19 @@ const HP_BAR_FG_COLOR = 0x7cfc00;
 const PROJECTILE_COLOR = 0xf4f1e8;
 const PROJECTILE_RADIUS_PX = 3;
 
+/**
+ * Маркер NPC (`spawnMarker`, kind: 'npc') — до этой правки `draw()` вообще
+ * не читал `spawnMarker`-сущности: рецензия `docs/planerka/03-vs/
+ * duxa-review-vs.md` и QA-отчёт (`docs/qa/vs-report.md`) независимо поймали
+ * один и тот же баг — NPC физически невидимы на карте (герой может
+ * взаимодействовать с ними по `E`, но не видит, где они стоят). Ромб вместо
+ * круга — единственная лёгкая визуальная отстройка «это не враг и не
+ * герой», доступная без спрайтов.
+ */
+const NPC_FILL = 0x2fe0a0; // terminal-phosphor — тот же акцент, что диалоговый короб
+const NPC_OUTLINE = 0xf4f1e8;
+const NPC_MARKER_SIZE_PX = 10;
+
 const PARTICLE_RADIUS_PX = 3;
 const PARTICLE_LIFETIME_MS = 400;
 const PARTICLE_POOL_MAX = 2048;
@@ -117,6 +130,7 @@ export class PixiRenderer implements IRenderer {
   private readonly heroGraphicsByEntity = new Map<EntityId, Graphics>();
   private readonly enemyVisualsByEntity = new Map<EntityId, EnemyVisual>();
   private readonly projectileGraphicsByEntity = new Map<EntityId, Graphics>();
+  private readonly npcGraphicsByEntity = new Map<EntityId, Graphics>();
   /** Переиспользуемый scratch-набор для вычисления «пропавших» сущностей в draw() — без аллокации на кадр. */
   private readonly seenScratch = new Set<EntityId>();
 
@@ -208,6 +222,7 @@ export class PixiRenderer implements IRenderer {
     this.heroGraphicsByEntity.clear();
     this.enemyVisualsByEntity.clear();
     this.projectileGraphicsByEntity.clear();
+    this.npcGraphicsByEntity.clear();
     this.particlePool.length = 0;
     this.freeParticles.length = 0;
 
@@ -368,8 +383,50 @@ export class PixiRenderer implements IRenderer {
     }
   }
 
+  private drawNpcs(world: World, seen: Set<EntityId>): void {
+    if (!this.objectsLayer) return;
+
+    for (const entity of world.query('spawnMarker', 'transform')) {
+      const marker = world.store('spawnMarker').get(entity);
+      const transform = world.store('transform').get(entity);
+      /* v8 ignore next */
+      if (!marker || !transform) continue;
+      if (marker.kind !== 'npc') continue;
+      seen.add(entity);
+
+      let gfx = this.npcGraphicsByEntity.get(entity);
+      if (!gfx) {
+        // Ромб (не круг — отличие от героя/врагов на глаз без подписи).
+        gfx = new Graphics()
+          .poly([
+            0, -NPC_MARKER_SIZE_PX,
+            NPC_MARKER_SIZE_PX, 0,
+            0, NPC_MARKER_SIZE_PX,
+            -NPC_MARKER_SIZE_PX, 0,
+          ])
+          .fill(NPC_FILL)
+          .stroke({ width: 2, color: NPC_OUTLINE });
+        this.objectsLayer.addChild(gfx);
+        this.npcGraphicsByEntity.set(entity, gfx);
+      }
+
+      // NPC-метки статичны (не двигаются) — интерполяция им не нужна, в
+      // отличие от героя/врагов/снарядов.
+      const screen = this.iso.toScreen(transform.x, transform.y, transform.z);
+      gfx.position.set(screen.sx, screen.sy - NPC_MARKER_SIZE_PX);
+      gfx.zIndex = depthKey(transform.x, transform.y, transform.z, 'object');
+    }
+
+    for (const [entity, gfx] of this.npcGraphicsByEntity) {
+      if (seen.has(entity)) continue;
+      this.objectsLayer.removeChild(gfx);
+      gfx.destroy();
+      this.npcGraphicsByEntity.delete(entity);
+    }
+  }
+
   /**
-   * Читает компоненты героя/врагов/снарядов и обновляет пулы спрайтов;
+   * Читает компоненты героя/врагов/снарядов/NPC и обновляет пулы спрайтов;
    * двигает камеру всей сценой разом (дёшево — не пересчитывает позицию
    * каждого тайла). `alpha` — интерполяция `prevX/prevY → x/y` (§3.1
    * архитектуры).
@@ -380,16 +437,18 @@ export class PixiRenderer implements IRenderer {
     const seen = this.seenScratch;
     seen.clear();
     this.drawHero(world, alpha, seen);
-    // `seen` совместно используется героем/врагами/снарядами — у них разные
-    // пулы (`heroGraphicsByEntity`/`enemyVisualsByEntity`/
-    // `projectileGraphicsByEntity`), поэтому пересечение id между категориями
-    // невозможно (ECS-сущность имеет только один набор компонентов), но
-    // очищать `seen` между вызовами не нужно — каждый `drawX` ищет своих
-    // «пропавших» только в своей `Map`.
+    // `seen` совместно используется героем/врагами/снарядами/NPC — у них
+    // разные пулы (`heroGraphicsByEntity`/`enemyVisualsByEntity`/
+    // `projectileGraphicsByEntity`/`npcGraphicsByEntity`), поэтому
+    // пересечение id между категориями невозможно (ECS-сущность имеет
+    // только один набор компонентов), но очищать `seen` между вызовами не
+    // нужно — каждый `drawX` ищет своих «пропавших» только в своей `Map`.
     seen.clear();
     this.drawEnemies(world, alpha, seen);
     seen.clear();
     this.drawProjectiles(world, alpha, seen);
+    seen.clear();
+    this.drawNpcs(world, seen);
 
     const camScreen = this.iso.toScreen(camera.x, camera.y);
     this.worldRoot.scale.set(camera.zoom);
@@ -447,6 +506,7 @@ export class PixiRenderer implements IRenderer {
     this.heroGraphicsByEntity.clear();
     this.enemyVisualsByEntity.clear();
     this.projectileGraphicsByEntity.clear();
+    this.npcGraphicsByEntity.clear();
     this.particlePool.length = 0;
     this.freeParticles.length = 0;
     this.seenScratch.clear();

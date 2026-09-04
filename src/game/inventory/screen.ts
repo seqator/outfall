@@ -21,6 +21,7 @@ import {
   type InventorySlotView,
   type InventoryViewModel,
 } from '../../ui/inventory';
+import type { I18n } from '../i18n';
 import type { ArmorSlotTable } from './equip-slots';
 import { equipItem, removeItem, unequipItem } from './inventory';
 import { requireItem, type ItemRegistry } from './registry';
@@ -35,6 +36,8 @@ export interface InventoryScreenOptions {
   readonly armorSlots: ArmorSlotTable;
   /** Каркас персонажа (`rpg-system.md` §1.1) — вне зоны OF-017, приходит готовым от вызывающей стороны. */
   readonly karkas: number;
+  /** Резолвер локализации (`src/game/i18n`, OF-019/025) — обязателен, см. докстринг `dialogue-screen.ts` про баг с сырыми ключами в OF-030. */
+  readonly t: I18n['t'];
   /** Вызывается после каждого изменения состояния — обычно записывает его в `SaveStore`/ECS-компонент вызывающей стороны (OF-019/будущая интеграция). */
   onStateChange?(state: InventoryState): void;
 }
@@ -47,6 +50,7 @@ export interface InventoryScreen {
 
 function toItemView(
   registry: ItemRegistry,
+  t: I18n['t'],
   uid: string,
   itemId: string,
   quantity: number,
@@ -55,12 +59,11 @@ function toItemView(
   const item = requireItem(registry, itemId);
   return {
     uid,
-    // TODO(OF-019): резолвить nameKey/descKey через I18n, когда он появится; пока — сырой ключ контента.
-    name: item.nameKey,
+    name: t(item.nameKey),
     quantity,
     weightKg: item.weight,
     priceGaiki: item.value,
-    effectText: item.descKey,
+    effectText: t(item.descKey),
     ...(decayRemainingMs !== undefined
       ? { decay: { remainingMs: decayRemainingMs, warning: decayRemainingMs < DECAY_WARNING_MS } }
       : {}),
@@ -70,6 +73,7 @@ function toItemView(
 function toViewModel(
   state: InventoryState,
   registry: ItemRegistry,
+  t: I18n['t'],
   karkas: number,
   selectedUid: string | undefined,
 ): InventoryViewModel {
@@ -81,13 +85,13 @@ function toViewModel(
     return {
       slotId,
       ...(stack
-        ? { item: toItemView(registry, stack.uid, stack.itemId, stack.quantity, stack.decayRemainingMs) }
+        ? { item: toItemView(registry, t, stack.uid, stack.itemId, stack.quantity, stack.decayRemainingMs) }
         : {}),
     };
   });
 
   const backpack = state.backpack.map((stack) =>
-    toItemView(registry, stack.uid, stack.itemId, stack.quantity, stack.decayRemainingMs),
+    toItemView(registry, t, stack.uid, stack.itemId, stack.quantity, stack.decayRemainingMs),
   );
 
   return {
@@ -121,7 +125,7 @@ export function createInventoryScreen(
   }
 
   function refresh(): void {
-    panel.update(toViewModel(state, options.registry, options.karkas, selectedUid));
+    panel.update(toViewModel(state, options.registry, options.t, options.karkas, selectedUid));
   }
 
   const handlers: InventoryHandlers = {

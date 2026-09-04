@@ -50,6 +50,7 @@ import {
 import { createFpsOverlay } from '../ui';
 import { createBrowserRaf } from './browser-raf';
 import { createDialogueScreen, createGameState, type GameState } from './dialogue';
+import { createI18n, loadI18nDictionary, type I18n } from './i18n';
 import { createEmptyInventory } from './inventory';
 import {
   applyHeroSave,
@@ -67,6 +68,7 @@ import {
   loadMapIntoWorld,
   toRendererMapData,
 } from './world/map-loader';
+import { createTriggerRunner } from './world/triggers';
 
 export interface DemoScene {
   destroy(): void;
@@ -98,6 +100,8 @@ declare global {
        * покрывает `hero-movement.spec.ts` на детерминированной dev-room).
        */
       teleportHero(x: number, y: number): void;
+      /** Число живых ECS-сущностей врагов — для e2e-теста триггерной волны (`tests/e2e/trigger-chain.spec.ts`). */
+      getEnemyCount(): number;
     };
   }
 }
@@ -200,12 +204,6 @@ const NPC_DIALOG_FILES: Readonly<Record<string, string>> = {
   'npc.rodion': 'prolog-vybor',
 };
 
-/** Имена для подсказки `[E] <имя>` в HUD — `docs/narrative/world-bible.md`. */
-const NPC_DISPLAY_NAMES: Readonly<Record<string, string>> = {
-  'npc.sanitar': 'Санитар',
-  'npc.rodion': 'Родион «Ключик»',
-};
-
 async function loadDialog(fileName: string): Promise<Dialog> {
   const res = await fetch(`/data/dialogs/${fileName}.json`);
   if (!res.ok) throw new Error(`demo-scene: не удалось загрузить диалог «${fileName}» (${String(res.status)})`);
@@ -214,6 +212,23 @@ async function loadDialog(fileName: string): Promise<Dialog> {
 
 /** Радиус, в котором `interact` (E) открывает диалог с NPC, в тайлах. */
 const INTERACT_RADIUS = 2;
+
+/**
+ * Точка старта игрока `S` и точка панорамной камеры `P` из
+ * `docs/levels/01-truba.md` §2 (зона A, "3–8 сек" в таблице первых 60 секунд
+ * концепта). `findSpawnPoint` (геометрический центр карты) — не то же самое:
+ * до этой правки герой стартовал в центре Трубы, в зоне боя, минуя весь
+ * задуманный пролог (см. `docs/qa/vs-report.md`, P0 «hero spawn point»).
+ */
+const TRUBA_START_POINT = { x: 30, y: 6 };
+const TRUBA_PANORAMA_POINT = { x: 30, y: 2 };
+/** Сколько реального времени камера стоит на `P`, не следуя за героем — установочный план перед тем, как отдать управление камерой игроку. */
+const PANORAMA_DURATION_MS = 4000;
+const PANORAMA_ZOOM = 1.1;
+const GAMEPLAY_ZOOM = 1.5;
+
+/** Через сколько игрок возрождается после смерти — `docs/qa/vs-report.md` P0 «смерть без обратной связи»: без этого герой замирает навсегда. */
+const RESPAWN_DELAY_MS = 2500;
 
 export async function createDemoScene(
   root: HTMLElement,
@@ -245,17 +260,42 @@ export async function createDemoScene(
   // Диалоги подгружаются заранее (не по требованию), чтобы открытие диалога
   // при взаимодействии было мгновенным — их всего два, это дёшево.
   const dialogsByNpcId = new Map<string, Dialog>();
+  let hookDialog: Dialog | null = null;
   if (!devRoom) {
     for (const [npcId, fileName] of Object.entries(NPC_DIALOG_FILES)) {
       dialogsByNpcId.set(npcId, await loadDialog(fileName));
     }
+    // Крючок пролога (T6, «Глава 1. Труба») — не привязан ни к одному NPC,
+    // открывается автоматически по триггеру (см. ниже). До этой правки файл
+    // существовал, проходил `validate`, но был физически недостижим в игре
+    // (`docs/planerka/03-vs/duxa-review-vs.md`, кринж-лист №3).
+    hookDialog = await loadDialog('prolog-kruchok');
   }
 
-  const spawn = findSpawnPoint(map);
+  // Локализация (OF-019/025): без неё диалоговый UI и HUD показывают сырые
+  // ключи контента вместо текста — ровно баг из рецензии `docs/planerka/
+  // 03-vs/duxa-review-vs.md` п.1–2. `t` резолвится один раз на сцену и
+  // передаётся всюду, где строится текст для игрока.
+  const i18n: I18n = createI18n('ru', await loadI18nDictionary('ru'));
+  const t = (key: string): string => i18n.t(key);
+
+  // Точка старта — геометрический центр карты `findSpawnPoint(map)` подходит
+  // только для карт без сюжетной постановки (dev-room); настоящая «Труба»
+  // начинается в зоне A (`TRUBA_START_POINT`, см. докстринг константы) — это
+  // прямое исправление P0 из `docs/qa/vs-report.md` («герой стартует в
+  // центре арены боя, минуя весь пролог»).
+  const spawn = devRoom ? findSpawnPoint(map) : TRUBA_START_POINT;
   const hero = createHero(world, spawn);
   attachCombatComponents(world, hero);
 
-  spawnEnemiesFromMarkers(world, loadedMap.enemySpawnEntities);
+  // В dev-room врагов спавнить сразу — там нет ни триггеров, ни сюжета,
+  // `hero-movement.spec.ts`/`stress.spec.ts` рассчитаны именно на это. На
+  // настоящей «Трубе» волна врагов спавнится по триггеру T3 (см. цикл кадра
+  // ниже) — рецензия поймала, что раки стояли на карте с момента загрузки,
+  // а не «выходили по сценарию» (`duxa-review-vs.md`, замечание 6).
+  if (devRoom) {
+    spawnEnemiesFromMarkers(world, loadedMap.enemySpawnEntities);
+  }
 
   const stress = isStressMode();
   if (stress) {
@@ -309,13 +349,17 @@ export async function createDemoScene(
     return best ? { npcId: best.npcId, dialog: best.dialog } : null;
   }
 
-  const unsubscribeInteract = world.events.on('input.interact-requested', (payload) => {
+  /**
+   * Открывает диалоговый короб поверх сцены — общая точка и для ручного
+   * взаимодействия с NPC (`E` в радиусе), и для автоматического крючка
+   * пролога (триггер T6, ниже): останавливает `loop` на время диалога,
+   * синхронизирует `gameState`, зовёт `onClosed` после закрытия (например,
+   * показать титр главы).
+   */
+  function openDialogue(dialog: Dialog, onClosed?: () => void): void {
     if (activeDialogue) return;
-    const target = findNearestInteractableNpc(payload.x, payload.y);
-    if (!target) return;
-
     loop.stop();
-    activeDialogue = createDialogueScreen(root, target.dialog, gameState, {
+    activeDialogue = createDialogueScreen(root, dialog, gameState, t, {
       onStateChange(next): void {
         gameState = next;
       },
@@ -323,8 +367,16 @@ export async function createDemoScene(
         activeDialogue?.destroy();
         activeDialogue = null;
         loop.start();
+        onClosed?.();
       },
     });
+  }
+
+  const unsubscribeInteract = world.events.on('input.interact-requested', (payload) => {
+    if (activeDialogue) return;
+    const target = findNearestInteractableNpc(payload.x, payload.y);
+    if (!target) return;
+    openDialogue(target.dialog);
   });
 
   // OF-019: ручное сохранение/загрузка — F5/F9. Полноценный UI слотов не в
@@ -374,32 +426,97 @@ export async function createDemoScene(
   const raf = createBrowserRaf();
   const loop = createLoop(simulation, input.source, raf);
 
-  const camera = createCamera({ x: spawn.x, y: spawn.y, zoom: 1.5 });
+  // Панорама (концепт §6, 3–8 сек): камера стоит на `P` и не следует за
+  // героем первые `PANORAMA_DURATION_MS` — установочный план перед тем, как
+  // отдать камеру игроку. До этой правки её не было вообще: клик «Погнали»
+  // сразу ставил камеру на героя в произвольной точке карты
+  // (`duxa-review-vs.md` п.1, «угол коробки вместо панорамы», OF-047).
+  const camera = devRoom
+    ? createCamera({ x: spawn.x, y: spawn.y, zoom: GAMEPLAY_ZOOM })
+    : createCamera({ x: TRUBA_PANORAMA_POINT.x, y: TRUBA_PANORAMA_POINT.y, zoom: PANORAMA_ZOOM });
+  let panoramaUntilMs: number | null = devRoom ? null : performance.now() + PANORAMA_DURATION_MS;
+
+  // Триггеры карты (T1–T6, `public/data/maps/truba.json`) — до этой правки
+  // лежали в данных мёртвым грузом (`duxa-review-vs.md` п.3): ни подсказки
+  // управления, ни волны врагов по сценарию, ни крючка пролога. `devRoom`
+  // не участвует — там `map.triggers` пуст, раннер там холостой.
+  const triggerRunner = createTriggerRunner(map);
+  let hintUntilMs: number | null = null;
+  let heroDeadSinceMs: number | null = null;
 
   const fpsOverlay = createFpsOverlay(root);
 
   const unsubscribeFrame = loop.onFrame((alpha, frameDtMs) => {
+    const now = performance.now();
+    const panoramaActive = panoramaUntilMs !== null && now < panoramaUntilMs;
+    if (panoramaUntilMs !== null && !panoramaActive) {
+      // Панорама только что закончилась — отдаём камеру герою и снимаем зум.
+      camera.zoom = GAMEPLAY_ZOOM;
+      panoramaUntilMs = null;
+    }
+
     // Камера следует за героем — первая (и пока единственная) `controlled`-
     // сущность мира; интерполяция та же, что использует рендер для отрисовки
-    // (§3.1), иначе камера и герой рассинхронизируются на глаз.
+    // (§3.1), иначе камера и герой рассинхронизируются на глаз. Во время
+    // панорамы камера намеренно не следует — стоит на `P`.
     let heroTransform: { x: number; y: number; prevX: number; prevY: number } | undefined;
     for (const entity of world.query('transform', 'controlled')) {
       const transform = world.store('transform').get(entity);
       if (!transform) continue;
       heroTransform = transform;
-      const ix = transform.prevX + (transform.x - transform.prevX) * alpha;
-      const iy = transform.prevY + (transform.y - transform.prevY) * alpha;
-      followTarget(camera, ix, iy);
+      if (!panoramaActive) {
+        const ix = transform.prevX + (transform.x - transform.prevX) * alpha;
+        const iy = transform.prevY + (transform.y - transform.prevY) * alpha;
+        followTarget(camera, ix, iy);
+      }
       break;
     }
-    clampToMapBounds(camera, map.width, map.height);
+    if (!panoramaActive) clampToMapBounds(camera, map.width, map.height);
 
     renderer.draw(world, camera, alpha);
+
+    if (heroTransform && !devRoom && !activeDialogue) {
+      const triggerResult = triggerRunner.update(heroTransform.x, heroTransform.y, gameState);
+      gameState = triggerResult.state;
+      if (triggerResult.firedIds.includes('trigger_t1')) hintUntilMs = now + 6000;
+      if (triggerResult.firedIds.includes('trigger_t3')) {
+        spawnEnemiesFromMarkers(world, loadedMap.enemySpawnEntities);
+      }
+      // `prolog-kruchok.json` сам заканчивается узлом «title» (speaker
+      // «narrator», текст — «Глава 1. Труба») — титр главы уже часть
+      // диалога, отдельного оверлея поверх сцены не нужно.
+      if (triggerResult.firedIds.includes('trigger_t6') && hookDialog) {
+        openDialogue(hookDialog);
+      }
+    }
+
+    // Смерть героя (OF-016 останавливает движение на HP≤0, `input-control.ts`,
+    // но ничего дальше не происходило — герой замирал навсегда, если игрок
+    // не сохранился заранее, `docs/qa/vs-report.md` P0 «смерть без обратной
+    // связи»). Автовозрождение на точке старта — простейшая честная починка
+    // для вертикального среза, не полноценный экран смерти.
+    const health = heroTransform ? world.store('health').get(hero) : undefined;
+    if (health) {
+      if (health.hp <= 0 && heroDeadSinceMs === null) {
+        heroDeadSinceMs = now;
+      } else if (health.hp <= 0 && heroDeadSinceMs !== null && now - heroDeadSinceMs >= RESPAWN_DELAY_MS) {
+        health.hp = health.maxHp;
+        const transform = world.store('transform').get(hero);
+        if (transform) {
+          transform.x = spawn.x;
+          transform.y = spawn.y;
+          transform.prevX = spawn.x;
+          transform.prevY = spawn.y;
+        }
+        heroDeadSinceMs = null;
+      } else if (health.hp > 0) {
+        heroDeadSinceMs = null;
+      }
+    }
 
     const fps = frameDtMs > 0 ? 1000 / frameDtMs : 0;
     let hud = `FPS: ${fps.toFixed(0)}`;
     if (heroTransform) {
-      const health = world.store('health').get(hero);
       const weapons = world.store('weapons').get(hero);
       if (health && weapons) {
         const weaponDef = WEAPON_DEFS[weapons.equipped];
@@ -408,13 +525,18 @@ export async function createDemoScene(
           weaponDef.magazineSize !== undefined
             ? `${weaponState.ammo}/${weaponDef.magazineSize}`
             : '—';
-        const weaponName = weapons.equipped.replace('item.', '');
+        const weaponName = t(`${weapons.equipped}.name`);
         hud += ` | HP ${Math.ceil(health.hp)}/${health.maxHp} | ${weaponName} ${ammo}`;
       }
       if (!activeDialogue && !devRoom) {
         const nearby = findNearestInteractableNpc(heroTransform.x, heroTransform.y);
-        hud += nearby ? ` | [E] ${NPC_DISPLAY_NAMES[nearby.npcId] ?? nearby.npcId}` : '';
+        hud += nearby ? ` | [E] ${t(`${nearby.npcId}.name`)}` : '';
+        if (gameState.flags['flag.truba.water_rising'] === true) hud += ' | Вода поднимается';
       }
+    }
+    if (heroDeadSinceMs !== null) hud = 'ВЫ ПОГИБЛИ… возрождение | ' + hud;
+    if (hintUntilMs !== null && performance.now() < hintUntilMs) {
+      hud = 'WASD — идти, ЛКМ — стрелять, E — говорить | ' + hud;
     }
     fpsOverlay.update(fps);
     fpsOverlay.element.textContent = hud;
@@ -439,6 +561,11 @@ export async function createDemoScene(
       transform.y = y;
       transform.prevX = x;
       transform.prevY = y;
+    },
+    getEnemyCount(): number {
+      let count = 0;
+      for (const _entity of world.query('enemy')) count += 1;
+      return count;
     },
   };
 
